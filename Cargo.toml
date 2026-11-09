@@ -1,0 +1,21 @@
+[package]
+name = "vellum-iced"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+autoexamples = false
+
+[[example]]
+name = "iced-interaction"
+path = "examples/interaction.rs"
+
+[dependencies]
+vellum-clipboard-macos = { path = "../vellum-clipboard-macos" }
+vellum-editor = { path = "../vellum-editor", features = ["native-unicode"] }
+vellum-engine = { path = "../vellum-engine" }
+vellum-session = { path = "../vellum-session" }
+unicode-segmentation = "=1.13.3"
+iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "advanced"] }
+
+[lints]
+workspace = true
