@@ -71,7 +71,8 @@ impl Bridge {
     }
     fn clipboard_attachment(&mut self, token: &ViewToken) -> Result<(), BridgeError> {
         self.check(token)?;
-        // This iced presentation profile has no secondary-caret geometry yet.
+        // The clipboard workflow remains qualified for one selection only;
+        // secondary painting does not broaden clipboard interaction semantics.
         // Refuse hidden targets rather than exporting/editing only a primary.
         if self
             .editor
@@ -184,7 +185,7 @@ impl Bridge {
             && report.target_is_active
             && report.local == Some(TransferLocalDispositionV1::Applied)
         {
-            self.token = ViewToken(Arc::new(()));
+            self.token = ViewToken::fresh();
             // A projection failure cannot relabel an already applied native edit.
             if self.refresh_projection().is_err() {
                 report.view_refresh_failed = true;

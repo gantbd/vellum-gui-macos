@@ -14,6 +14,115 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn select_matches_returns_scoped_focus_and_actual_typing_edits_all_native_targets() {
+    let fixture = Fixture::new();
+    fs::write(fixture.0.join("a"), "cat\r\ncat").unwrap();
+    let mut gui = fixture.gui();
+    let token = gui.bridge.as_ref().unwrap().token();
+    let _ = gui.update(Message::QueryChanged(token.clone(), "cat".into()));
+    let _ = gui.update(Message::Find(token));
+    let task = gui.update(Message::SelectMatches(gui.bridge.as_ref().unwrap().token()));
+    assert!(gui.notice.is_empty(), "{}", gui.notice);
+    assert_eq!(
+        task.units(),
+        1,
+        "successful selection must return source focus work"
+    );
+    let mut framework = Framework::new();
+    let id = gui_source_id(&gui);
+    framework.focus_id(&mut gui, id);
+    assert!(framework.key(&mut gui, "X", Modifiers::empty()) > 0);
+    assert!(gui.notice.is_empty(), "{}", gui.notice);
+    assert_eq!(gui.bridge.as_ref().unwrap().content().text(), "X\nX");
+    let _ = gui.update(Message::Shortcut(
+        gui.bridge.as_ref().unwrap().token(),
+        Shortcut::Command(Command::Undo),
+    ));
+    assert_eq!(gui.bridge.as_ref().unwrap().content().text(), "cat\ncat");
+    gui.bridge.as_mut().unwrap().close(true).unwrap();
+}
+
+fn gui_source_id(gui: &Gui) -> iced::advanced::widget::Id {
+    gui.bridge.as_ref().unwrap().token().widget_id()
+}
+
+#[test]
+fn late_source_focus_neither_targets_nor_blurs_a_replacement_attachment() {
+    let fixture = Fixture::new();
+    let mut gui = fixture.gui();
+    let stale = gui_source_id(&gui);
+    let _ = gui.update(Message::Shortcut(
+        gui.bridge.as_ref().unwrap().token(),
+        Shortcut::Command(Command::NextDocument),
+    ));
+    let current = gui_source_id(&gui);
+    assert_ne!(stale, current);
+    let mut framework = Framework::new();
+    framework.focus_id(&mut gui, current);
+    framework.focus_id(&mut gui, stale);
+    assert!(
+        framework.key(&mut gui, "X", Modifiers::empty()) > 0,
+        "stale focus must not blur the current widget"
+    );
+    assert_eq!(gui.bridge.as_ref().unwrap().content().text(), "XB\n");
+    gui.bridge.as_mut().unwrap().close(true).unwrap();
+}
+
+#[test]
+fn refused_select_matches_does_not_issue_focus_work() {
+    let fixture = Fixture::new();
+    let mut gui = fixture.gui();
+    let task = gui.update(Message::SelectMatches(gui.bridge.as_ref().unwrap().token()));
+    assert!(!gui.notice.is_empty());
+    assert_eq!(task.units(), 0);
+    gui.bridge.as_mut().unwrap().close(true).unwrap();
+}
+
+#[test]
+fn actual_source_draw_uses_secondary_renderer_geometry_without_editing() {
+    let fixture = Fixture::new();
+    fs::write(fixture.0.join("a"), "cat\r\ncat").unwrap();
+    let mut gui = fixture.gui();
+    let token = gui.bridge.as_ref().unwrap().token();
+    let _ = gui.update(Message::QueryChanged(token.clone(), "cat".into()));
+    let _ = gui.update(Message::Find(token));
+    let token = gui.bridge.as_ref().unwrap().token();
+    let _ = gui.update(Message::SelectMatches(token));
+    assert!(gui.notice.is_empty(), "{}", gui.notice);
+    let bridge = gui.bridge.as_ref().unwrap();
+    let primary = bridge.content().cursor();
+    let mut renderer = Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0));
+    {
+        let mut view = document_editor(bridge);
+        let mut tree = Tree::new(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(500.0, 240.0)),
+        );
+        view.as_widget().draw(
+            &tree,
+            &mut renderer,
+            &iced::Theme::Dark,
+            &iced::advanced::renderer::Style {
+                text_color: iced::Color::WHITE,
+            },
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &node.bounds(),
+        );
+    }
+    let usage = bridge.secondary_geometry_usage();
+    assert_eq!(usage.completed, 1);
+    assert_eq!(usage.emitted_regions, 1);
+    assert_eq!(usage.refused, 0);
+    assert_eq!(bridge.content().cursor(), primary);
+    assert_eq!(bridge.content().text(), "cat\ncat");
+    assert!(!bridge.dirty());
+    gui.bridge.as_mut().unwrap().close(true).unwrap();
+}
+
+#[test]
 fn actual_source_widget_named_keys_route_unicode18_motion_and_deletion_to_engine() {
     let fixture = Fixture::new();
     fs::write(fixture.0.join("a"), "\u{94d}कX").unwrap();
@@ -122,6 +231,32 @@ struct Framework {
     comment: bool,
 }
 impl Framework {
+    fn focus_id(&mut self, gui: &mut Gui, id: iced::advanced::widget::Id) {
+        use iced::advanced::widget::{Operation, operation::Outcome};
+        let mut widget = document_editor(gui.bridge.as_ref().unwrap());
+        let tree = self
+            .tree
+            .get_or_insert_with(|| Tree::new(widget.as_widget()));
+        tree.diff(widget.as_widget());
+        let node = widget.as_widget_mut().layout(
+            tree,
+            &self.renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(640.0, 480.0)),
+        );
+        let mut operation: Box<dyn Operation> = Box::new(crate::attachment::focus_if_present(id));
+        loop {
+            widget.as_widget_mut().operate(
+                tree,
+                Layout::new(&node),
+                &self.renderer,
+                operation.as_mut(),
+            );
+            match operation.finish() {
+                Outcome::Chain(next) => operation = next,
+                _ => break,
+            }
+        }
+    }
     fn new() -> Self {
         Self {
             renderer: Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0)),

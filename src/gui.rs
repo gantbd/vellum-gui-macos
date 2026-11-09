@@ -11,6 +11,9 @@ use vellum_editor::{DestinationPlan, EditorError};
 #[path = "comments_ui.rs"]
 mod comments_ui;
 use comments_ui::{CommentMessage, CommentPane};
+#[cfg(feature = "desktop-qualification")]
+#[path = "desktop_qualification.rs"]
+pub(crate) mod qualification;
 
 pub struct Gui {
     bridge: Option<Bridge>,
@@ -41,6 +44,7 @@ pub enum Message {
     QueryChanged(ViewToken, String),
     ReplacementChanged(ViewToken, String),
     Find(ViewToken),
+    SelectMatches(ViewToken),
     Replace(ViewToken, bool),
     RequestDestination(ViewToken, bool),
     ConfirmDestination(DestinationPlan),
@@ -64,6 +68,7 @@ impl std::fmt::Debug for Message {
             Self::QueryChanged(..) => "QueryChanged(<redacted>)",
             Self::ReplacementChanged(..) => "ReplacementChanged(<redacted>)",
             Self::Find(..) => "Find",
+            Self::SelectMatches(..) => "SelectMatches",
             Self::Replace(..) => "Replace(<redacted>)",
             Self::RequestDestination(..) => "RequestDestination(<redacted>)",
             Self::ConfirmDestination(..) => "ConfirmDestination(<redacted>)",
@@ -128,6 +133,7 @@ impl Gui {
         )
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let mut task = Task::none();
         if !matches!(
             &message,
             Message::ConfirmDestination(_) | Message::CancelDestination
@@ -221,6 +227,21 @@ impl Gui {
                     _ => String::new(),
                 };
             }
+            Message::SelectMatches(token) => {
+                self.confirming = false;
+                self.notice.clear();
+                if let Some(bridge) = self.bridge.as_mut() {
+                    match bridge.select_matches(&token) {
+                        Ok(()) => {
+                            task = iced::advanced::widget::operate(
+                                crate::attachment::focus_if_present(bridge.token().widget_id()),
+                            )
+                            .discard();
+                        }
+                        Err(error) => self.notice = error.to_string(),
+                    }
+                }
+            }
             Message::Replace(token, all) => {
                 self.confirming = false;
                 self.notice = match self
@@ -297,7 +318,7 @@ impl Gui {
             }
         }
         self.comments.refresh(self.bridge.as_mut());
-        Task::none()
+        task
     }
     fn request_close(&mut self, discard: bool) -> Task<Message> {
         if !discard && self.comments.has_draft() {
@@ -457,6 +478,7 @@ impl Gui {
                 .on_input(move |s| Message::QueryChanged(query_token.clone(), s))
                 .on_submit(Message::Find(token.clone())),
             button("Find").on_press(Message::Find(token.clone())),
+            button("Select matches").on_press(Message::SelectMatches(token.clone())),
             button("Previous").on_press(Message::Shortcut(
                 token.clone(),
                 Shortcut::Command(Command::PreviousMatch)
@@ -489,7 +511,15 @@ impl Gui {
         } else {
             editor
         };
-        let mut layout=column![toolbar,open,search,replace,body,text(bridge.status()),text(&self.notice),text(loss),text("Cmd-C/X/V source clipboard; Cmd-S/Z/Shift-Z; F3 next match; F4 lock; F6 next file. Native clipboard wired; live OS qualification pending.")].spacing(8).padding(12);
+        let source_status = if bridge.multiple_selections_active() {
+            format!(
+                "{} — Multi-selection: edits affect ALL targets, including clipped/unavailable overlays; Select All exits.",
+                bridge.status()
+            )
+        } else {
+            bridge.status().to_owned()
+        };
+        let mut layout=column![toolbar,open,search,replace,body,text(source_status),text(&self.notice),text(loss),text("Cmd-C/X/V source clipboard; Cmd-S/Z/Shift-Z; F3 next match; F4 lock; F6 next file. Private clipboard qualified; General/desktop qualification pending.")].spacing(8).padding(12);
         if let Some((_, plan)) = &self.destination {
             layout = layout
                 .push(text(format!(
@@ -530,12 +560,14 @@ fn document_editor(bridge: &Bridge) -> Element<'_, Message> {
     let token = bridge.token();
     let input_token = token.clone();
     let binding_token = token.clone();
-    crate::attachment::attached(
-        token,
+    crate::attachment::attached_source(
+        bridge,
         text_editor(bridge.content())
+            .id(token.widget_id())
             .font(iced::Font::MONOSPACE)
+            .size(crate::attachment::SOURCE_SIZE)
             .height(iced::Length::Fill)
-            .padding(12)
+            .padding(crate::attachment::SOURCE_PADDING)
             .on_action(move |action| Message::Widget(input_token.clone(), action))
             .key_binding(move |press| key_binding(binding_token.clone(), press)),
     )

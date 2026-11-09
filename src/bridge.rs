@@ -11,21 +11,31 @@ use vellum_engine::{coordinator::DocumentVersion, source::Replacement};
 use vellum_session::host::SessionConfig;
 mod clipboard;
 mod comments;
+mod geometry;
+pub use geometry::{GeometryRequest, GeometryUsage};
 
 /// Attachment identity, not authority or a frozen engine command. Ordered input
 /// may continue after this view's own edits; a tab/attachment change spends it.
 /// Native proposals still bind the exact current original snapshot separately.
 #[derive(Clone)]
-pub struct ViewToken(Arc<()>);
+pub struct ViewToken(Arc<ViewIdentity>);
+struct ViewIdentity {
+    widget_id: iced::advanced::widget::Id,
+}
 impl ViewToken {
     pub(crate) fn fresh() -> Self {
-        Self(Arc::new(()))
+        Self(Arc::new(ViewIdentity {
+            widget_id: iced::advanced::widget::Id::unique(),
+        }))
+    }
+    pub(crate) fn widget_id(&self) -> iced::advanced::widget::Id {
+        self.0.widget_id.clone()
     }
 }
 #[cfg(test)]
 impl ViewToken {
     pub(crate) fn test_token() -> Self {
-        Self(Arc::new(()))
+        Self::fresh()
     }
 }
 impl PartialEq for ViewToken {
@@ -64,6 +74,7 @@ pub enum BridgeError {
     Capacity,
     NativeLineIntent,
     UnsupportedSelectionProfile,
+    GeometryUnavailable,
 }
 impl From<EditorError> for BridgeError {
     fn from(e: EditorError) -> Self {
@@ -106,6 +117,12 @@ pub struct Bridge {
     max_edits: usize,
     max_payload: usize,
     full_refreshes: Option<u64>,
+    geometry_usage: GeometryUsage,
+    secondary_targets: Option<geometry::SecondaryTargets>,
+    has_secondary_selections: bool,
+    secondary_usage: std::cell::Cell<GeometryUsage>,
+    #[cfg(feature = "desktop-qualification")]
+    pub(crate) source_viewport: std::cell::Cell<Option<iced::Rectangle>>,
 }
 impl Bridge {
     pub fn open_reference(paths: &[PathBuf]) -> Result<Self, BridgeError> {
@@ -161,13 +178,19 @@ impl Bridge {
             original,
             content,
             projection,
-            token: ViewToken(Arc::new(())),
+            token: ViewToken::fresh(),
             dirty,
             status: "Ready — engine owns source/history; generated newline LF".into(),
             max_source: limits.max_source_bytes,
             max_edits: limits.max_edits,
             max_payload: limits.max_edit_payload_bytes,
             full_refreshes: Some(1),
+            geometry_usage: GeometryUsage::default(),
+            secondary_targets: None,
+            has_secondary_selections: false,
+            secondary_usage: std::cell::Cell::new(GeometryUsage::default()),
+            #[cfg(feature = "desktop-qualification")]
+            source_viewport: std::cell::Cell::new(None),
         })
     }
     pub fn content(&self) -> &Content {
@@ -184,6 +207,9 @@ impl Bridge {
     }
     pub fn status(&self) -> &str {
         &self.status
+    }
+    pub(crate) fn multiple_selections_active(&self) -> bool {
+        self.has_secondary_selections
     }
     pub fn is_closed(&self) -> bool {
         self.editor.is_closed()
@@ -255,6 +281,8 @@ impl Bridge {
             .unwrap_or(primary);
         self.editor
             .set_selection(&self.original.version, anchor, primary)?;
+        self.has_secondary_selections = false;
+        self.secondary_targets = None;
         self.content = projected_content(&self.projection.text);
         self.record_refresh();
         self.content.move_to(cursor);
@@ -373,6 +401,42 @@ impl Bridge {
         token: &ViewToken,
         action: text_editor::Action,
     ) -> Result<(), BridgeError> {
+        // Routing follows the native owner, never a fallible paint cache. An
+        // unavailable projection must not turn a multi-edit into a primary edit.
+        if self.has_secondary_selections {
+            self.check(token)?;
+            let native = match &action {
+                text_editor::Action::Edit(Edit::Insert(c)) => Action::Insert(c.to_string()),
+                text_editor::Action::Edit(Edit::Paste(text)) => {
+                    if text.len() > self.max_payload {
+                        return Err(BridgeError::Capacity);
+                    }
+                    Action::Insert((**text).clone())
+                }
+                text_editor::Action::Edit(Edit::Enter) => Action::Insert("\n".into()),
+                text_editor::Action::Edit(Edit::Backspace) => Action::Backspace,
+                text_editor::Action::Edit(Edit::Delete) => Action::Delete,
+                text_editor::Action::Move(Motion::Left) => Action::Left,
+                text_editor::Action::Move(Motion::Right) => Action::Right,
+                text_editor::Action::Select(Motion::Left) => {
+                    Action::ExtendSelection(vellum_editor::Movement::Left)
+                }
+                text_editor::Action::Select(Motion::Right) => {
+                    Action::ExtendSelection(vellum_editor::Movement::Right)
+                }
+                text_editor::Action::SelectAll => Action::SelectAll,
+                text_editor::Action::Scroll { .. } => {
+                    self.content.perform(action);
+                    return Ok(());
+                }
+                _ => return Err(BridgeError::UnsupportedSelectionProfile),
+            };
+            let result = self.editor.apply(native);
+            // Native publication may succeed before a later presentation error.
+            // Always retire old geometry and capture the actual resulting state.
+            self.refresh_projection()?;
+            return result.map_err(Into::into);
+        }
         if self.native_unicode_enabled() {
             let (motion, extend) = match &action {
                 text_editor::Action::Move(m) => (Some(*m), false),
@@ -732,7 +796,7 @@ impl Bridge {
                 | Command::PreviousMatch
         ) && result.is_ok()
         {
-            self.token = ViewToken(Arc::new(()));
+            self.token = ViewToken::fresh();
         }
         self.refresh_projection()?;
         result.map_err(Into::into)
@@ -753,14 +817,23 @@ impl Bridge {
     ) -> Result<(), BridgeError> {
         self.check(token)?;
         let result = self.editor.confirm_destination(plan);
-        self.token = ViewToken(Arc::new(()));
+        self.token = ViewToken::fresh();
         self.refresh_projection()?;
         result.map_err(Into::into)
     }
     pub fn find(&mut self, token: &ViewToken, query: &str) -> Result<(), BridgeError> {
         self.check(token)?;
         self.editor.find(query)?;
-        self.token = ViewToken(Arc::new(()));
+        self.token = ViewToken::fresh();
+        self.refresh_projection()
+    }
+    /// Select the existing complete native search result, not a UI-side scan.
+    pub fn select_matches(&mut self, token: &ViewToken) -> Result<(), BridgeError> {
+        self.check(token)?;
+        self.editor.select_matches()?;
+        // Conservative until refresh captures the exact resulting selection.
+        self.has_secondary_selections = true;
+        self.token = ViewToken::fresh();
         self.refresh_projection()
     }
     pub fn replace_match(
@@ -771,7 +844,7 @@ impl Bridge {
     ) -> Result<(), BridgeError> {
         self.check(token)?;
         self.editor.replace_match(replacement, all)?;
-        self.token = ViewToken(Arc::new(()));
+        self.token = ViewToken::fresh();
         self.refresh_projection()
     }
     /// The new attachment spends old UI input even when joining the same owner.
@@ -783,7 +856,7 @@ impl Bridge {
     ) -> Result<bool, BridgeError> {
         self.check(token)?;
         let added = self.editor.open_additional(path)?;
-        self.token = ViewToken(Arc::new(()));
+        self.token = ViewToken::fresh();
         self.refresh_projection()?;
         Ok(added)
     }
@@ -804,6 +877,11 @@ impl Bridge {
         })
     }
     fn refresh_projection(&mut self) -> Result<(), BridgeError> {
+        self.secondary_targets = None;
+        let native_selection = self.editor.native_selection()?;
+        self.has_secondary_selections = native_selection
+            .as_ref()
+            .is_some_and(|s| s.selections.selections().len() > 1);
         // Engine state remains authoritative even after a save failure. Capture
         // its actual state; error delivery cannot roll a Written outcome back.
         let original = self.editor.snapshot()?;
@@ -818,7 +896,7 @@ impl Bridge {
         } else {
             // This is a new visual attachment, never repair of an executable
             // target: spend queued old input and visibly reanchor the display.
-            self.token = ViewToken(Arc::new(()));
+            self.token = ViewToken::fresh();
             self.editor.set_caret(0)?;
             true
         };
@@ -834,6 +912,11 @@ impl Bridge {
         } else {
             self.editor.status().into()
         };
+        if reset {
+            self.has_secondary_selections = false;
+        } else {
+            self.capture_secondary_targets(native_selection)?;
+        }
         Ok(())
     }
     pub fn close(&mut self, discard: bool) -> Result<(), BridgeError> {

@@ -12,3 +12,5 @@ mod comment_draft;
 mod gui;
 #[cfg(target_os = "macos")]
 pub use gui::Gui;
+#[cfg(all(target_os = "macos", feature = "desktop-qualification"))]
+pub use gui::qualification::run as qualify_desktop;

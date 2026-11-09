@@ -20,6 +20,39 @@ struct Focus {
     restore: bool,
     observed: bool,
 }
+
+/// Resolve the exact attachment before using Iced's focus operation, which
+/// otherwise blurs every other widget even when the requested ID is absent.
+/// Both traversals run synchronously as one widget operation, not two UI tasks.
+pub(crate) fn focus_if_present(id: iced::advanced::widget::Id) -> impl Operation {
+    FocusIfPresent { id, found: false }
+}
+struct FocusIfPresent {
+    id: iced::advanced::widget::Id,
+    found: bool,
+}
+impl Operation for FocusIfPresent {
+    fn traverse(&mut self, visit: &mut dyn FnMut(&mut dyn Operation)) {
+        visit(self)
+    }
+    fn focusable(
+        &mut self,
+        id: Option<&iced::advanced::widget::Id>,
+        _: Rectangle,
+        _: &mut dyn Focusable,
+    ) {
+        self.found |= id == Some(&self.id);
+    }
+    fn finish(&self) -> iced::advanced::widget::operation::Outcome<()> {
+        if self.found {
+            iced::advanced::widget::operation::Outcome::Chain(Box::new(
+                iced::advanced::widget::operation::focusable::focus(self.id.clone()),
+            ))
+        } else {
+            iced::advanced::widget::operation::Outcome::None
+        }
+    }
+}
 impl Operation for Focus {
     fn traverse(&mut self, visit: &mut dyn FnMut(&mut dyn Operation)) {
         visit(self);
@@ -39,6 +72,7 @@ impl Operation for Focus {
 struct Attached<'a, Message> {
     token: ViewToken,
     child: Element<'a, Message>,
+    source: Option<&'a crate::Bridge>,
 }
 
 pub(crate) fn attached<'a, Message: 'a>(
@@ -48,8 +82,25 @@ pub(crate) fn attached<'a, Message: 'a>(
     Element::new(Attached {
         token,
         child: child.into(),
+        source: None,
     })
 }
+
+pub(crate) fn attached_source<'a, Message: 'a>(
+    source: &'a crate::Bridge,
+    child: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    Element::new(Attached {
+        token: source.token(),
+        child: child.into(),
+        source: Some(source),
+    })
+}
+
+// Shared with the source widget: do not infer glyph positions or line metrics.
+pub(crate) const SOURCE_PADDING: u16 = 12;
+pub(crate) const SOURCE_SIZE: f32 = 16.0;
+const SECONDARY_REGION_LIMIT: usize = 4096;
 
 impl<Message> Widget<Message, Theme, Renderer> for Attached<'_, Message> {
     fn tag(&self) -> tree::Tag {
@@ -122,6 +173,53 @@ impl<Message> Widget<Message, Theme, Renderer> for Attached<'_, Message> {
             cursor,
             viewport,
         );
+        if let Some(source) = self.source {
+            use iced::advanced::{
+                Renderer as _,
+                text::{LineHeight, editor::Selection},
+            };
+            let text_bounds = layout.bounds().shrink(SOURCE_PADDING);
+            #[cfg(feature = "desktop-qualification")]
+            source.source_viewport.set(Some(text_bounds));
+            let Some(clip) = text_bounds.intersection(viewport) else {
+                return;
+            };
+            let Ok(selections) =
+                source.secondary_geometry(text_bounds.size(), SECONDARY_REGION_LIMIT)
+            else {
+                return;
+            };
+            let translation = text_bounds.position() - iced::Point::ORIGIN;
+            let color = theme.extended_palette().primary.strong.color;
+            for selection in selections {
+                let (regions, color) = match selection {
+                    Selection::Caret(point) => (
+                        vec![Rectangle::new(
+                            point,
+                            Size::new(
+                                1.0,
+                                LineHeight::default()
+                                    .to_absolute(iced::Pixels(SOURCE_SIZE))
+                                    .into(),
+                            ),
+                        )],
+                        color,
+                    ),
+                    Selection::Range(regions) => (regions, iced::Color { a: 0.25, ..color }),
+                };
+                for region in regions {
+                    if let Some(bounds) = (region + translation).intersection(&clip) {
+                        renderer.fill_quad(
+                            renderer::Quad {
+                                bounds,
+                                ..Default::default()
+                            },
+                            color,
+                        );
+                    }
+                }
+            }
+        }
     }
     fn operate(
         &mut self,

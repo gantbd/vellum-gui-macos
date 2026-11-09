@@ -5,6 +5,10 @@ edition.workspace = true
 publish.workspace = true
 autoexamples = false
 
+[features]
+# Explicit live-window probe; never enabled by normal app builds.
+desktop-qualification = []
+
 [[example]]
 name = "iced-interaction"
 path = "examples/interaction.rs"
