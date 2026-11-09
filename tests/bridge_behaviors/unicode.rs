@@ -1,6 +1,6 @@
 use super::*;
-use vellum_editor::NativeUnicodeProfile;
 use vellum_iced::BridgeError;
+use vellum_model::NativeUnicodeProfile;
 
 fn native(f: &Fixture, capacity: usize) -> Bridge {
     let mut config = reference_profile();
@@ -114,10 +114,11 @@ fn exact_partial_targets_are_not_repaired_by_delete_or_scroll() {
 fn refused_candidate_is_not_published_and_edge_noop_still_checks_native_policy() {
     let f = Fixture::new(b"a");
     let mut bridge = Bridge::open(&[f.path()], reference_profile()).unwrap();
-    let mut profile = NativeUnicodeProfile::reference();
-    profile.provider.max_source_bytes = 1;
+    let profile = NativeUnicodeProfile::reference();
+    let mut factory = vellum_adapter_unicode_icu::IcuFactory::reference();
+    factory.limits.max_source_bytes = 1;
     bridge
-        .enable_native_unicode(&bridge.token(), profile)
+        .enable_native_unicode_with(&bridge.token(), factory, profile)
         .unwrap();
     assert!(
         bridge

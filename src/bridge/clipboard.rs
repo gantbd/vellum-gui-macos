@@ -1,6 +1,6 @@
 //! Provider-neutral clipboard attachment/projection routing. No platform I/O.
 use super::*;
-use vellum_editor::{ClipboardPlan, ClipboardReport};
+use vellum_model::{ClipboardPlan, ClipboardReport};
 use vellum_session::host::copy_transfer::*;
 
 impl Bridge {
@@ -9,10 +9,10 @@ impl Bridge {
     pub fn native_clipboard(
         &mut self,
         token: &ViewToken,
-        operation: Option<vellum_clipboard_macos::Operation>,
+        operation: Option<vellum_adapter_clipboard_macos::Operation>,
     ) -> Result<String, BridgeError> {
         self.clipboard_attachment(token)?;
-        let access = vellum_clipboard_macos::DesktopAccess {
+        let access = vellum_adapter_clipboard_macos::DesktopAccess {
             control: true,
             source_read: true,
             source_edit: true,
@@ -43,10 +43,10 @@ impl Bridge {
         self.dirty = self.editor.is_dirty()?;
         result.map(|r| r.notice()).map_err(Into::into)
     }
-    pub fn native_clipboard_stage(&self) -> Option<vellum_clipboard_macos::ClipboardStage> {
+    pub fn native_clipboard_stage(&self) -> Option<vellum_adapter_clipboard_macos::ClipboardStage> {
         self.native_clipboard.as_ref().map(|c| c.stage())
     }
-    pub fn native_clipboard_usage(&self) -> Option<vellum_clipboard_macos::Usage> {
+    pub fn native_clipboard_usage(&self) -> Option<vellum_adapter_clipboard_macos::Usage> {
         self.native_clipboard.as_ref().and_then(|c| c.usage())
     }
     pub fn configure_clipboard(

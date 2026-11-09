@@ -6,9 +6,10 @@ use std::{
     sync::Arc,
 };
 use unicode_segmentation::UnicodeSegmentation;
-use vellum_editor::{Action, DestinationPlan, Editor, EditorError, EditorSnapshot};
 use vellum_engine::{coordinator::DocumentVersion, source::Replacement};
-use vellum_session::host::SessionConfig;
+use vellum_model::{
+    Action, DestinationPlan, Editor, EditorError, EditorSnapshot, ReferenceSessionConfig,
+};
 mod clipboard;
 mod comments;
 mod geometry;
@@ -67,7 +68,7 @@ pub enum Command {
 #[derive(Debug)]
 pub enum BridgeError {
     Editor(EditorError),
-    Clipboard(vellum_clipboard_macos::IntegrationError),
+    Clipboard(vellum_adapter_clipboard_macos::IntegrationError),
     Stale,
     ProjectionMismatch,
     Position,
@@ -81,10 +82,10 @@ impl From<EditorError> for BridgeError {
         Self::Editor(e)
     }
 }
-impl From<vellum_clipboard_macos::IntegrationError> for BridgeError {
-    fn from(error: vellum_clipboard_macos::IntegrationError) -> Self {
+impl From<vellum_adapter_clipboard_macos::IntegrationError> for BridgeError {
+    fn from(error: vellum_adapter_clipboard_macos::IntegrationError) -> Self {
         match error {
-            vellum_clipboard_macos::IntegrationError::Editor(error) => Self::Editor(error),
+            vellum_adapter_clipboard_macos::IntegrationError::Editor(error) => Self::Editor(error),
             other => Self::Clipboard(other),
         }
     }
@@ -106,7 +107,7 @@ pub struct Proposal {
 }
 pub struct Bridge {
     editor: Editor,
-    native_clipboard: Option<vellum_clipboard_macos::ReferenceClipboard>,
+    native_clipboard: Option<vellum_adapter_clipboard_macos::ReferenceClipboard>,
     original: EditorSnapshot,
     content: Content,
     projection: Projection,
@@ -126,12 +127,12 @@ pub struct Bridge {
 }
 impl Bridge {
     pub fn open_reference(paths: &[PathBuf]) -> Result<Self, BridgeError> {
-        let mut bridge = Self::open(paths, vellum_clipboard_macos::reference_session_config())?;
+        let mut bridge = Self::open(paths, crate::reference_session_config())?;
         bridge.enable_native_unicode(
             &bridge.token(),
-            vellum_editor::NativeUnicodeProfile::reference(),
+            vellum_model::NativeUnicodeProfile::reference(),
         )?;
-        bridge.native_clipboard = Some(vellum_clipboard_macos::ReferenceClipboard::new(
+        bridge.native_clipboard = Some(vellum_adapter_clipboard_macos::ReferenceClipboard::new(
             &mut bridge.editor,
         )?);
         Ok(bridge)
@@ -140,10 +141,22 @@ impl Bridge {
     pub fn enable_native_unicode(
         &mut self,
         token: &ViewToken,
-        profile: vellum_editor::NativeUnicodeProfile,
+        profile: vellum_model::NativeUnicodeProfile,
+    ) -> Result<(), BridgeError> {
+        self.enable_native_unicode_with(
+            token,
+            vellum_adapter_unicode_icu::IcuFactory::reference(),
+            profile,
+        )
+    }
+    pub fn enable_native_unicode_with(
+        &mut self,
+        token: &ViewToken,
+        factory: vellum_adapter_unicode_icu::IcuFactory,
+        profile: vellum_model::NativeUnicodeProfile,
     ) -> Result<(), BridgeError> {
         self.check(token)?;
-        self.editor.enable_native_unicode(profile)?;
+        self.editor.enable_native_unicode(factory, profile)?;
         self.status =
             "Ready — native Unicode 18 source commands; shaping/IME qualification separate".into();
         Ok(())
@@ -156,14 +169,14 @@ impl Bridge {
     }
     /// Includes candidate preview and exact-version evidence generation; not a
     /// count of user commands, edits or versions. No document identity/content.
-    pub fn native_unicode_usage(&self) -> Option<vellum_editor::NativeUnicodeUsage> {
+    pub fn native_unicode_usage(&self) -> Option<vellum_model::NativeUnicodeUsage> {
         self.editor.unicode_provider_usage()
     }
-    pub fn open(paths: &[PathBuf], config: SessionConfig) -> Result<Self, BridgeError> {
+    pub fn open(paths: &[PathBuf], config: ReferenceSessionConfig) -> Result<Self, BridgeError> {
         let limits = config.engine.limits.source;
         let mut editor = Editor::open(paths, config)?;
         if editor.comments_enabled() {
-            editor.enable_comment_files(vellum_editor::CommentFileLimits::reference())?;
+            editor.enable_comment_files(vellum_model::CommentFileLimits::reference())?;
         }
         let original = editor.snapshot()?;
         let projection = Projection::new(&original.text);
@@ -419,10 +432,10 @@ impl Bridge {
                 text_editor::Action::Move(Motion::Left) => Action::Left,
                 text_editor::Action::Move(Motion::Right) => Action::Right,
                 text_editor::Action::Select(Motion::Left) => {
-                    Action::ExtendSelection(vellum_editor::Movement::Left)
+                    Action::ExtendSelection(vellum_model::Movement::Left)
                 }
                 text_editor::Action::Select(Motion::Right) => {
-                    Action::ExtendSelection(vellum_editor::Movement::Right)
+                    Action::ExtendSelection(vellum_model::Movement::Right)
                 }
                 text_editor::Action::SelectAll => Action::SelectAll,
                 text_editor::Action::Scroll { .. } => {
@@ -448,9 +461,9 @@ impl Bridge {
                 self.check_single_native_selection()?;
                 self.editor.apply(if extend {
                     Action::ExtendSelection(if motion == Motion::Left {
-                        vellum_editor::Movement::Left
+                        vellum_model::Movement::Left
                     } else {
-                        vellum_editor::Movement::Right
+                        vellum_model::Movement::Right
                     })
                 } else if motion == Motion::Left {
                     Action::Left

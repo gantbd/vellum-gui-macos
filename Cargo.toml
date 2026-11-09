@@ -2,6 +2,9 @@
 name = "vellum-iced"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 publish.workspace = true
 autoexamples = false
 
@@ -14,10 +17,13 @@ name = "iced-interaction"
 path = "examples/interaction.rs"
 
 [dependencies]
-vellum-clipboard-macos = { path = "../vellum-clipboard-macos" }
-vellum-editor = { path = "../vellum-editor", features = ["native-unicode"] }
-vellum-engine = { path = "../vellum-engine" }
-vellum-session = { path = "../vellum-session" }
+vellum-adapter-clipboard-macos = { version = "=0.1.0", path = "../vellum-adapter-clipboard-macos" }
+vellum-adapter-local-fs = { version = "=0.1.0", path = "../vellum-adapter-local-fs" }
+vellum-adapter-annotation-json = { version = "=0.1.0", path = "../vellum-adapter-annotation-json" }
+vellum-adapter-unicode-icu = { version = "=0.1.0", path = "../vellum-adapter-unicode-icu" }
+vellum-model = { version = "=0.1.0", path = "../vellum-model", features = ["native-unicode"] }
+vellum-engine = { version = "=0.1.0", path = "../vellum-engine" }
+vellum-session = { version = "=0.1.0", path = "../vellum-session" }
 unicode-segmentation = "=1.13.3"
 iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "advanced"] }
 

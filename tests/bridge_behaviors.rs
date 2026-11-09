@@ -8,8 +8,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use vellum_editor::reference_profile;
-use vellum_iced::{Bridge, Command};
+use vellum_iced::{Bridge, Command, reference_session_config as reference_profile};
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[path = "bridge_behaviors/clipboard.rs"]
 mod clipboard;

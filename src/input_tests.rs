@@ -163,7 +163,7 @@ fn full_window_layout_keeps_source_and_comment_draft_in_separate_usable_viewport
     let token = gui.bridge.as_ref().unwrap().token();
     let _ = gui.update(Message::Comment(CommentMessage::Begin(
         token,
-        vellum_editor::CommentPointProfile::Content,
+        vellum_model::CommentPointProfile::Content,
     )));
     assert!(gui.notice.is_empty(), "{}", gui.notice);
     let renderer = Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0));
@@ -387,7 +387,7 @@ fn comment_widget_preedit_commit_history_and_apply_remain_outside_source_editing
     let source = gui.bridge.as_ref().unwrap().token();
     let _ = gui.update(Message::Comment(CommentMessage::Begin(
         source,
-        vellum_editor::CommentPointProfile::Content,
+        vellum_model::CommentPointProfile::Content,
     )));
     assert!(gui.notice.is_empty(), "{}", gui.notice);
     let mut framework = Framework::new();

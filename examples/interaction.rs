@@ -120,7 +120,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sync::atomic::{AtomicU64, Ordering},
         time::Instant,
     };
-    use vellum_editor::reference_profile;
     use vellum_engine::instrumentation::NativeTimingProfileV1;
     use vellum_iced::Bridge;
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -172,15 +171,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let original = unit.repeat(bytes / unit.len());
             let visual = original.replace("\r\n", "\n");
             fs::write(&path, &original)?;
-            let mut config = reference_profile();
             // Experiment-only envelope; the reference apps keep their explicit
             // 64-KiB limits. Fund complete candidates/baselines, not only input.
             let limit = bytes + 16;
+            let mut config = vellum_iced::reference_session_config_with_filesystem_limits(
+                vellum_adapter_local_fs::FilesystemLimits {
+                    max_resources: 16,
+                    max_bytes: 65536.max(limit),
+                    max_stage_attempts: 16,
+                    max_metadata_bytes: 65536,
+                },
+            );
             config.engine.limits.source.max_source_bytes =
                 config.engine.limits.source.max_source_bytes.max(limit);
             config.engine.limits.max_staged_bytes =
                 config.engine.limits.max_staged_bytes.max(limit * 4);
-            config.filesystem.max_bytes = config.filesystem.max_bytes.max(limit);
             let resources = config
                 .engine
                 .resources
@@ -205,14 +210,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let attaching = Instant::now();
             let mut bridge = Bridge::open(std::slice::from_ref(&path), config)?;
             if options.native_unicode {
-                let mut profile = vellum_editor::NativeUnicodeProfile::reference();
+                let mut profile = vellum_model::NativeUnicodeProfile::reference();
                 profile.capture_capacity = capacity;
-                profile.timing = if capacity == 0 {
-                    vellum_editor::NativeUnicodeTiming::Off
+                let mut factory = vellum_adapter_unicode_icu::IcuFactory::reference();
+                factory.timing = if capacity == 0 {
+                    vellum_adapter_unicode_icu::Timing::Off
                 } else {
-                    vellum_editor::NativeUnicodeTiming::ProcessService
+                    vellum_adapter_unicode_icu::Timing::ProcessService
                 };
-                bridge.enable_native_unicode(&bridge.token(), profile)?;
+                bridge.enable_native_unicode_with(&bridge.token(), factory, profile)?;
             }
             let attach_ns = nanos(attaching, Instant::now())?;
             let token = bridge.token();

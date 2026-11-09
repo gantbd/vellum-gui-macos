@@ -2,7 +2,7 @@
 use super::*;
 use crate::comment_draft::Draft;
 use iced::widget::{column, scrollable};
-use vellum_editor::{
+use vellum_model::{
     CommentDraft, CommentHandle, CommentHistoryDirection, CommentLocationEvidence,
     CommentPlacement, CommentPointProfile, CommentTarget,
 };
@@ -13,7 +13,7 @@ pub(super) struct CommentPane {
     error: Option<String>,
     form: Option<Form>,
     path: String,
-    pending: Option<(ViewToken, vellum_editor::CommentFilePlan)>,
+    pending: Option<(ViewToken, vellum_model::CommentFilePlan)>,
     dirty: bool,
 }
 struct Form {
@@ -30,7 +30,7 @@ enum Target {
 pub enum CommentMessage {
     FilePath(ViewToken, String),
     FileRequest(ViewToken, bool),
-    FileConfirm(ViewToken, vellum_editor::CommentFilePlan),
+    FileConfirm(ViewToken, vellum_model::CommentFilePlan),
     FileCancel,
     FileReleaseFailed(ViewToken),
     Toggle(ViewToken),
@@ -756,7 +756,7 @@ mod tests {
         assert_eq!(gui.comments.form.as_ref().unwrap().body.raw(), "unapplied");
         assert_eq!(
             gui.bridge.as_ref().unwrap().native_clipboard_stage(),
-            Some(vellum_clipboard_macos::ClipboardStage::Idle)
+            Some(vellum_adapter_clipboard_macos::ClipboardStage::Idle)
         );
         send(&mut gui, CommentMessage::Cancel(form));
         gui.bridge.as_mut().unwrap().close(false).unwrap();

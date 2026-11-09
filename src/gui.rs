@@ -6,8 +6,8 @@ use iced::{
     window,
 };
 use std::path::PathBuf;
-use vellum_clipboard_macos::Operation;
-use vellum_editor::{DestinationPlan, EditorError};
+use vellum_adapter_clipboard_macos::Operation;
+use vellum_model::{DestinationPlan, EditorError};
 #[path = "comments_ui.rs"]
 mod comments_ui;
 use comments_ui::{CommentMessage, CommentPane};
@@ -420,7 +420,7 @@ impl Gui {
             button("Retry delivery").on_press_maybe(
                 bridge
                     .native_clipboard_stage()
-                    .filter(|s| *s != vellum_clipboard_macos::ClipboardStage::Idle)
+                    .filter(|s| *s != vellum_adapter_clipboard_macos::ClipboardStage::Idle)
                     .map(|_| Message::Clipboard(token.clone(), None))
             ),
             button("Quit").on_press(Message::Shortcut(token.clone(), Shortcut::Quit)),

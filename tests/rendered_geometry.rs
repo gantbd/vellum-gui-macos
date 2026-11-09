@@ -44,7 +44,7 @@ fn selected_matches_paint_current_native_targets_and_edit_as_one_history_step() 
     std::fs::write(&path, "cat\r\ncat").unwrap();
     let mut bridge = Bridge::open(
         std::slice::from_ref(&path),
-        vellum_editor::reference_profile(),
+        vellum_iced::reference_session_config(),
     )
     .unwrap();
     bridge.find(&bridge.token(), "cat").unwrap();
@@ -217,7 +217,7 @@ fn bridge_geometry_binds_exact_source_version_and_refuses_unrepresentable_target
     std::fs::write(dir.join("b"), "other").unwrap();
     let mut bridge = Bridge::open(
         &[dir.join("a"), dir.join("b")],
-        vellum_editor::reference_profile(),
+        vellum_iced::reference_session_config(),
     )
     .unwrap();
     let token = bridge.token();
