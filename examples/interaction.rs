@@ -121,7 +121,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         time::Instant,
     };
     use vellum_engine::instrumentation::NativeTimingProfileV1;
-    use vellum_iced::Bridge;
+    use vellum_gui_macos::Bridge;
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--help"] {
         println!(
@@ -156,7 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for capacity in [0, 256, 1] {
             let directory = loop {
                 let path = std::env::temp_dir().join(format!(
-                    "vellum-iced-perf-{}-{}",
+                    "vellum-gui-macos-perf-{}-{}",
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Experiment-only envelope; the reference apps keep their explicit
             // 64-KiB limits. Fund complete candidates/baselines, not only input.
             let limit = bytes + 16;
-            let mut config = vellum_iced::reference_session_config_with_filesystem_limits(
+            let mut config = vellum_gui_macos::reference_session_config_with_filesystem_limits(
                 vellum_adapter_local_fs::FilesystemLimits {
                     max_resources: 16,
                     max_bytes: 65536.max(limit),

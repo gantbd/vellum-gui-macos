@@ -1,4 +1,4 @@
-use crate::{Bridge, BridgeError, Command, ViewToken};
+use crate::{Bridge, BridgeError, Command, ViewToken, plan_workspace_roots};
 use iced::{
     Element, Subscription, Task, event,
     keyboard::{self, Key, Modifiers},
@@ -293,17 +293,39 @@ impl Gui {
             Message::OpenPath => {
                 if !self.path.is_empty() {
                     self.confirming = false;
-                    let path = PathBuf::from(&self.path);
+                    let root = PathBuf::from(&self.path);
+                    let paths = match plan_workspace_roots([root]) {
+                        Ok(paths) => paths,
+                        Err(error) => {
+                            self.notice = error.to_string();
+                            return task;
+                        }
+                    };
                     if let Some(bridge) = self.bridge.as_mut() {
-                        self.notice = match bridge.open_document(&bridge.token(), &path) {
-                            Ok(_) => {
+                        let mut attached = 0usize;
+                        let mut failure = None;
+                        for path in paths {
+                            match bridge.open_document(&bridge.token(), &path) {
+                                Ok(_) => attached += 1,
+                                Err(error) => {
+                                    failure = Some(error);
+                                    break;
+                                }
+                            }
+                        }
+                        self.notice = failure.map_or_else(
+                            || {
                                 self.path.clear();
                                 String::new()
-                            }
-                            Err(error) => error.to_string(),
-                        };
+                            },
+                            |error| {
+                                format!(
+                                    "root admission stopped after {attached} attachment(s): {error}"
+                                )
+                            },
+                        );
                     } else {
-                        match Bridge::open_reference(&[path]) {
+                        match Bridge::open_reference(&paths) {
                             Ok(bridge) => {
                                 self.bridge = Some(bridge);
                                 self.notice.clear();
@@ -644,6 +666,48 @@ fn key_binding(
 mod tests {
     use super::*;
     #[test]
+    fn empty_gui_admits_a_directory_without_a_synthetic_document() {
+        use std::{
+            fs,
+            sync::atomic::{AtomicU64, Ordering},
+        };
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let directory = loop {
+            let path = std::env::temp_dir().join(format!(
+                "vellum-gui-empty-open-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => break path,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("fixture directory: {error}"),
+            }
+        };
+        let first = directory.join("a.txt");
+        let second = directory.join("b.txt");
+        fs::write(&first, "first").unwrap();
+        fs::write(&second, "second").unwrap();
+
+        let mut gui = Gui::open(&[]);
+        assert!(gui.bridge.is_none());
+        assert_eq!(gui.title(), "Vellum — open file");
+        let _ = gui.update(Message::PathChanged(
+            directory.to_str().expect("UTF-8 fixture").into(),
+        ));
+        let _ = gui.update(Message::OpenPath);
+        assert_eq!(gui.bridge.as_ref().unwrap().document_count(), 2);
+        assert!(gui.path.is_empty());
+        assert!(gui.notice.is_empty());
+
+        gui.bridge.as_mut().unwrap().close(true).unwrap();
+        drop(gui);
+        fs::remove_file(first).unwrap();
+        fs::remove_file(second).unwrap();
+        fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
     fn message_diagnostics_redact_committed_and_pasted_source() {
         let token = ViewToken::test_token();
         let message = Message::Widget(
@@ -726,7 +790,7 @@ mod tests {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let directory = loop {
             let path = std::env::temp_dir().join(format!(
-                "vellum-iced-close-{}-{}",
+                "vellum-gui-macos-close-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));

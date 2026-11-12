@@ -8,7 +8,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use vellum_iced::{Bridge, Command, reference_session_config as reference_profile};
+use vellum_gui_macos::{Bridge, Command, reference_session_config as reference_profile};
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[path = "bridge_behaviors/clipboard.rs"]
 mod clipboard;
@@ -19,7 +19,7 @@ impl Fixture {
     fn new(bytes: &[u8]) -> Self {
         loop {
             let path = std::env::temp_dir().join(format!(
-                "vellum-iced-{}-{}",
+                "vellum-gui-macos-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
@@ -121,7 +121,7 @@ fn line_intent_uses_native_prefix_columns_not_a_widget_replacement_guess() {
     send(&mut bridge, Action::SelectAll);
     assert!(matches!(
         bridge.proposal(&bridge.token(), &Edit::Unindent),
-        Err(vellum_iced::BridgeError::NativeLineIntent)
+        Err(vellum_gui_macos::BridgeError::NativeLineIntent)
     ));
     send(&mut bridge, Action::Edit(Edit::Unindent));
     assert_eq!(bridge.content().text(), "prose\n    code\n");

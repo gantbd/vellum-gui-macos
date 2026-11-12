@@ -30,7 +30,7 @@ fn cursor(line: usize, column: usize) -> Cursor {
 
 #[test]
 fn selected_matches_paint_current_native_targets_and_edit_as_one_history_step() {
-    use vellum_iced::{Bridge, BridgeError, Command};
+    use vellum_gui_macos::{Bridge, BridgeError, Command};
     let dir = std::env::temp_dir().join(format!(
         "vellum-secondary-{}-{}",
         std::process::id(),
@@ -44,7 +44,7 @@ fn selected_matches_paint_current_native_targets_and_edit_as_one_history_step() 
     std::fs::write(&path, "cat\r\ncat").unwrap();
     let mut bridge = Bridge::open(
         std::slice::from_ref(&path),
-        vellum_iced::reference_session_config(),
+        vellum_gui_macos::reference_session_config(),
     )
     .unwrap();
     bridge.find(&bridge.token(), "cat").unwrap();
@@ -198,7 +198,7 @@ fn renderer_query_matches_its_primary_paint_geometry_without_mutating_cursor() {
 
 #[test]
 fn bridge_geometry_binds_exact_source_version_and_refuses_unrepresentable_targets() {
-    use vellum_iced::{Bridge, BridgeError, Command, GeometryRequest};
+    use vellum_gui_macos::{Bridge, BridgeError, Command, GeometryRequest};
     let mut dir = None;
     for n in 0..256 {
         let path = std::env::temp_dir().join(format!("vellum-geometry-{}-{n}", std::process::id()));
@@ -217,7 +217,7 @@ fn bridge_geometry_binds_exact_source_version_and_refuses_unrepresentable_target
     std::fs::write(dir.join("b"), "other").unwrap();
     let mut bridge = Bridge::open(
         &[dir.join("a"), dir.join("b")],
-        vellum_iced::reference_session_config(),
+        vellum_gui_macos::reference_session_config(),
     )
     .unwrap();
     let token = bridge.token();

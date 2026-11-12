@@ -14,6 +14,76 @@ mod gui;
 pub use gui::Gui;
 
 #[cfg(target_os = "macos")]
+use std::path::{Path, PathBuf};
+
+/// Content-safe closed failures for bounded file/directory root planning.
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootAdmissionError {
+    Empty,
+    Capacity,
+    Discovery(vellum_host::workspace::DirectoryDiscoveryRefusal),
+}
+
+#[cfg(target_os = "macos")]
+impl std::fmt::Display for RootAdmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "workspace root admission refused: {self:?}")
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl std::error::Error for RootAdmissionError {}
+
+/// Deterministically expands regular-file and directory roots without opening
+/// an editor or publishing partial UI state. The editor independently
+/// revalidates each resulting locator when it attaches the document.
+#[cfg(target_os = "macos")]
+pub fn plan_workspace_roots(
+    roots: impl IntoIterator<Item = impl AsRef<Path>>,
+) -> Result<Vec<PathBuf>, RootAdmissionError> {
+    use vellum_host::workspace::{DirectoryDiscoveryLimits, DirectoryDiscoveryOutcome};
+
+    const MAX_FILES: usize = 16;
+    let limits = DirectoryDiscoveryLimits {
+        max_entries: 4096,
+        max_files: MAX_FILES,
+        max_depth: 64,
+        max_path_bytes: 4096,
+        max_total_path_bytes: 65_536,
+    };
+    let mut files = Vec::new();
+    files
+        .try_reserve_exact(MAX_FILES)
+        .map_err(|_| RootAdmissionError::Capacity)?;
+    let mut saw_root = false;
+    for root in roots {
+        saw_root = true;
+        let discovered = vellum_adapter_local_fs::discover_workspace_files(root.as_ref(), limits);
+        let discovered = match discovered {
+            DirectoryDiscoveryOutcome::Complete { files, .. } => files,
+            DirectoryDiscoveryOutcome::Refused { reason, .. } => {
+                return Err(RootAdmissionError::Discovery(reason));
+            }
+        };
+        for file in discovered {
+            if files.contains(&file) {
+                continue;
+            }
+            if files.len() == MAX_FILES {
+                return Err(RootAdmissionError::Capacity);
+            }
+            files.push(file);
+        }
+    }
+    if !saw_root || files.is_empty() {
+        return Err(RootAdmissionError::Empty);
+    }
+    files.sort();
+    Ok(files)
+}
+
+#[cfg(target_os = "macos")]
 pub fn reference_session_config() -> vellum_model::ReferenceSessionConfig {
     reference_session_config_with_filesystem_limits(vellum_adapter_local_fs::FilesystemLimits {
         max_resources: 16,
@@ -55,11 +125,16 @@ pub fn run(args: Vec<std::ffi::OsString>) -> Result<(), Box<dyn std::error::Erro
     }
     if args.len() == 1 && args[0] == "--help" {
         println!(
-            "vellum-desktop [EXISTING_FILE...]\nNative macOS reference GUI; source/history authority remains in the Vellum engine. Requires the qualified local ICU4C 79.1 profile; portable Unicode packaging is still pending."
+            "vellum-gui-macos [EXISTING_FILE_OR_DIRECTORY...]\nWith no arguments, starts empty. Native macOS reference GUI; source/history authority remains in the Vellum engine. Requires the qualified local ICU4C 79.1 profile; portable Unicode packaging is still pending."
         );
         return Ok(());
     }
-    let paths: Vec<PathBuf> = args.into_iter().map(PathBuf::from).collect();
+    let roots: Vec<PathBuf> = args.into_iter().map(PathBuf::from).collect();
+    let paths = if roots.is_empty() {
+        Vec::new()
+    } else {
+        plan_workspace_roots(&roots)?
+    };
     iced::application(move || Gui::open(&paths), Gui::update, Gui::view)
         .title(Gui::title)
         .subscription(Gui::subscription)
@@ -67,4 +142,87 @@ pub fn run(args: Vec<std::ffi::OsString>) -> Result<(), Box<dyn std::error::Erro
         .window_size((960.0, 720.0))
         .run()?;
     Ok(())
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod root_admission_tests {
+    use super::*;
+    use std::{
+        fs,
+        os::unix::fs::symlink,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
+
+    struct Fixture(PathBuf);
+
+    impl Fixture {
+        fn new() -> Self {
+            let id = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "vellum-gui-root-admission-{}-{id}",
+                std::process::id()
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn empty_roots_do_not_manufacture_a_document() {
+        assert_eq!(
+            plan_workspace_roots(std::iter::empty::<&Path>()),
+            Err(RootAdmissionError::Empty)
+        );
+        let fixture = Fixture::new();
+        assert_eq!(
+            plan_workspace_roots([&fixture.0]),
+            Err(RootAdmissionError::Empty)
+        );
+    }
+
+    #[test]
+    fn plans_are_sorted_duplicate_free_and_links_refuse_completely() {
+        let fixture = Fixture::new();
+        let nested = fixture.0.join("nested");
+        fs::create_dir(&nested).unwrap();
+        let first = fixture.0.join("b.txt");
+        let second = nested.join("a.txt");
+        fs::write(&first, "first").unwrap();
+        fs::write(&second, "second").unwrap();
+        let plan = plan_workspace_roots([fixture.0.as_path(), first.as_path()]).unwrap();
+        let mut expected = vec![first.clone(), second];
+        expected.sort();
+        assert_eq!(plan, expected);
+
+        symlink(&first, fixture.0.join("link.txt")).unwrap();
+        assert!(matches!(
+            plan_workspace_roots([&fixture.0]),
+            Err(RootAdmissionError::Discovery(
+                vellum_host::workspace::DirectoryDiscoveryRefusal::UnsupportedResource
+            ))
+        ));
+    }
+
+    #[test]
+    fn aggregate_plan_refuses_more_than_the_editor_capacity() {
+        let fixture = Fixture::new();
+        let mut roots = Vec::new();
+        for index in 0..17 {
+            let path = fixture.0.join(format!("{index:02}.txt"));
+            fs::write(&path, index.to_string()).unwrap();
+            roots.push(path);
+        }
+        assert_eq!(
+            plan_workspace_roots(&roots),
+            Err(RootAdmissionError::Capacity)
+        );
+    }
 }

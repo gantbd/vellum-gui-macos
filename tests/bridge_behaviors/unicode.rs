@@ -1,5 +1,5 @@
 use super::*;
-use vellum_iced::BridgeError;
+use vellum_gui_macos::BridgeError;
 use vellum_model::NativeUnicodeProfile;
 
 fn native(f: &Fixture, capacity: usize) -> Bridge {

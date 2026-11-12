@@ -1,12 +1,47 @@
+[workspace]
+resolver = "3"
+exclude = [
+    "vendor/objc2-app-kit",
+    "vendor/iced_core",
+    "vendor/iced_graphics",
+    "vendor/iced_widget",
+]
+
+[patch.crates-io]
+objc2-app-kit = { path = "vendor/objc2-app-kit" }
+iced_core = { path = "vendor/iced_core" }
+iced_graphics = { path = "vendor/iced_graphics" }
+iced_widget = { path = "vendor/iced_widget" }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gantbd/vellum-gui-macos"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
 [package]
-name = "vellum-iced"
+name = "vellum-gui-macos"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
+readme = "README.md"
+description = "Composable Iced presentation and standalone macOS GUI for Vellum"
 autoexamples = false
+
+[lib]
+name = "vellum_gui_macos"
+
+[[bin]]
+name = "vellum-gui-macos"
+path = "src/main.rs"
 
 [features]
 # Explicit live-window probe; never enabled by normal app builds.
@@ -17,15 +52,19 @@ name = "iced-interaction"
 path = "examples/interaction.rs"
 
 [dependencies]
-vellum-adapter-clipboard-macos = { version = "=0.1.0", path = "../vellum-adapter-clipboard-macos" }
-vellum-adapter-local-fs = { version = "=0.1.0", path = "../vellum-adapter-local-fs" }
-vellum-adapter-annotation-json = { version = "=0.1.0", path = "../vellum-adapter-annotation-json" }
-vellum-adapter-unicode-icu = { version = "=0.1.0", path = "../vellum-adapter-unicode-icu" }
-vellum-model = { version = "=0.1.0", path = "../vellum-model", features = ["native-unicode"] }
-vellum-engine = { version = "=0.1.0", path = "../vellum-engine" }
-vellum-session = { version = "=0.1.0", path = "../vellum-session" }
+vellum-adapter-clipboard-macos = { version = "=0.1.0", path = "../vellum/adapters/clipboard-macos" }
+vellum-adapter-local-fs = { version = "=0.1.0", path = "../vellum/adapters/local-fs" }
+vellum-adapter-annotation-json = { version = "=0.1.0", path = "../vellum/adapters/annotation-json" }
+vellum-adapter-unicode-icu = { version = "=0.1.0", path = "../vellum/adapters/unicode-icu" }
+vellum-model = { package = "vellum-editor", version = "=0.1.0", path = "../vellum/host/vellum-editor", features = ["native-unicode"] }
+vellum-engine = { version = "=0.1.0", path = "../vellum/engine/vellum-engine" }
+vellum-host = { version = "=0.1.0", path = "../vellum/host/vellum-host" }
+vellum-session = { version = "=0.1.0", path = "../vellum/host/vellum-session" }
 unicode-segmentation = "=1.13.3"
 iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "advanced"] }
+
+[dev-dependencies]
+serde_json = "=1.0.151"
 
 [lints]
 workspace = true

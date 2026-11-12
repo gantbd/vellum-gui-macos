@@ -1,0 +1,53 @@
+# Vellum GUI for macOS
+
+`vellum-gui-macos` is the standalone macOS application and reusable Iced
+presentation library for Vellum. It is a peer of `vellum-tui` and `vellum-mcp`,
+not part of the semantic engine and not a second source/history authority.
+
+It starts empty or from files, directories, or a mix:
+
+```sh
+cargo run --locked --
+cargo run --locked -- README.md src
+```
+
+The Open field accepts one file or directory at a time. Directory discovery is
+deterministic, refuses symbolic links and special files, and admits at most 16
+unique regular files. The editor host independently revalidates each locator.
+
+## Composition boundary
+
+The `vellum_gui_macos` library owns Iced state, projection, input translation,
+rendered-selection geometry, and attachment identities. It owns no process
+lifecycle, filesystem policy, document source, or history. The binary selects
+the macOS adapters and window lifecycle.
+
+A future workbench can import this library beside Agora or another engine's
+Iced library under one application. That composition root must route effects
+to each engine's own authority and must not import this standalone binary.
+
+## Qualified dependency patches
+
+The renderer contract relies on reviewed, pinned patches to Iced 0.14 and
+`objc2-app-kit` retained under `vendor/`. They add a read-only, bounded
+selection-geometry query and the generated private-pasteboard release binding.
+Their upstream revisions, archive hashes, licenses, exact changes, and
+nonclaims are recorded in [vendor/README.md](vendor/README.md). Stock Iced does
+not provide the geometry query; removing these patches would discard qualified
+multi-selection rendering behavior.
+
+## Current source checkout
+
+Until the pinned Vellum commit is reachable from its declared GitHub remote,
+this unreleased peer uses a sibling `../vellum` checkout. Run:
+
+```sh
+cargo test --all-targets --locked --offline
+```
+
+GitHub source installation will replace the Vellum paths with exact Git
+revisions after remote reachability is established. Nothing is published to
+crates.io, signed, notarized, or released.
+
+The optional `desktop-qualification` feature opens a real window and must be
+run deliberately. Normal automated tests do not open UI windows.
