@@ -59,8 +59,10 @@ vellum-adapter-unicode-icu = { version = "=0.1.0", path = "../vellum/adapters/un
 vellum-model = { package = "vellum-editor", version = "=0.1.0", path = "../vellum/host/vellum-editor", features = ["native-unicode"] }
 vellum-engine = { version = "=0.1.0", path = "../vellum/engine/vellum-engine" }
 vellum-session = { version = "=0.1.0", path = "../vellum/host/vellum-session" }
+vellum-sdk-client = { version = "=0.1.0", path = "../vellum/sdk/client" }
+vellum-adapter-local-authentication = { version = "=0.1.0", path = "../vellum/adapters/local-authentication" }
 unicode-segmentation = "=1.13.3"
-iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "advanced"] }
+iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "tokio", "advanced"] }
 
 [dev-dependencies]
 serde_json = "=1.0.151"

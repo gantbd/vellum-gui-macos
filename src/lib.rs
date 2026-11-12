@@ -12,6 +12,10 @@ mod comment_draft;
 mod gui;
 #[cfg(target_os = "macos")]
 pub use gui::Gui;
+#[cfg(target_os = "macos")]
+mod service;
+#[cfg(target_os = "macos")]
+pub use service::*;
 
 #[cfg(target_os = "macos")]
 use std::path::{Path, PathBuf};
@@ -103,9 +107,12 @@ pub fn run(args: Vec<std::ffi::OsString>) -> Result<(), Box<dyn std::error::Erro
         #[cfg(not(feature = "desktop-qualification"))]
         return Err("live probe requires the desktop-qualification feature; it opens a window with synthetic temporary documents only".into());
     }
+    if args.first().is_some_and(|argument| argument == "--service") {
+        return run_service_mode(&args);
+    }
     if args.len() == 1 && args[0] == "--help" {
         println!(
-            "vellum-gui-macos [EXISTING_FILE_OR_DIRECTORY...]\nWith no arguments, starts empty. Native macOS reference GUI; source/history authority remains in the Vellum engine. Requires the qualified local ICU4C 79.1 profile; portable Unicode packaging is still pending."
+            "vellum-gui-macos [EXISTING_FILE_OR_DIRECTORY...]\nvellum-gui-macos --service SOCKET [--credential CREDENTIAL]\nWith no arguments, starts empty. Service mode projects the shared workspace client without taking source/history authority. Native macOS reference GUI; requires the qualified local ICU4C 79.1 profile for embedded mode; portable Unicode packaging is still pending."
         );
         return Ok(());
     }

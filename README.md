@@ -11,9 +11,19 @@ cargo run --locked --
 cargo run --locked -- README.md src
 ```
 
+It can instead project a running local Vellum service:
+
+```sh
+cargo run --locked -- --service /path/to/vellum.sock
+cargo run --locked -- --service /path/to/vellum.sock --credential /path/to/credential
+```
+
 The Open field accepts one file or directory at a time. Directory discovery is
 deterministic, refuses symbolic links and special files, and admits at most 16
 unique regular files. The editor host independently revalidates each locator.
+In service mode the File and Directory buttons submit literal locators to the
+service, framework edits become witnessed replacements, and an indeterminate
+operation locks editing until its exact replay completes.
 
 ## Composition boundary
 
@@ -51,3 +61,8 @@ crates.io, signed, notarized, or released.
 
 The optional `desktop-qualification` feature opens a real window and must be
 run deliberately. Normal automated tests do not open UI windows.
+
+The Unix-socket service mode is a local peer projection, not a remote-network
+transport claim. Live filesystem watching, IME preedit, bidi layout,
+screen-reader behavior, signing, notarization, and a stable UI API remain
+unclaimed.
