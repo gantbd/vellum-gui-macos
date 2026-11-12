@@ -25,6 +25,12 @@ In service mode the File and Directory buttons submit literal locators to the
 service, framework edits become witnessed replacements, and an indeterminate
 operation locks editing until its exact replay completes.
 
+`tests/live/service_journey.sh` builds the exact sibling Vellum daemon, starts
+it on private Unix sockets with edit/save ceilings, drives the reusable GUI
+controller headlessly through open/edit/save/disconnect, verifies exact
+persisted bytes, and requests orderly control-socket shutdown. CI runs this
+journey without opening a desktop window.
+
 ## Composition boundary
 
 The `vellum_gui_macos` library owns Iced state, projection, input translation,
