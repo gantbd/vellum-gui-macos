@@ -2204,7 +2204,6 @@ dependencies = [
  "vellum-adapter-unicode-icu",
  "vellum-editor",
  "vellum-engine",
- "vellum-host",
  "vellum-session",
 ]
 

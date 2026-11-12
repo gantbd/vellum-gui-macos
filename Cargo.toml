@@ -58,7 +58,6 @@ vellum-adapter-annotation-json = { version = "=0.1.0", path = "../vellum/adapter
 vellum-adapter-unicode-icu = { version = "=0.1.0", path = "../vellum/adapters/unicode-icu" }
 vellum-model = { package = "vellum-editor", version = "=0.1.0", path = "../vellum/host/vellum-editor", features = ["native-unicode"] }
 vellum-engine = { version = "=0.1.0", path = "../vellum/engine/vellum-engine" }
-vellum-host = { version = "=0.1.0", path = "../vellum/host/vellum-host" }
 vellum-session = { version = "=0.1.0", path = "../vellum/host/vellum-session" }
 unicode-segmentation = "=1.13.3"
 iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "advanced"] }
