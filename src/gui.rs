@@ -24,6 +24,7 @@ pub struct Gui {
     replacement: String,
     destination: Option<(ViewToken, DestinationPlan)>,
     comments: CommentPane,
+    exit_requested: bool,
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Shortcut {
@@ -89,6 +90,7 @@ impl Gui {
                 replacement: String::new(),
                 destination: None,
                 comments: CommentPane::default(),
+                exit_requested: false,
             };
         }
         match Bridge::open_reference(paths) {
@@ -101,6 +103,7 @@ impl Gui {
                 replacement: String::new(),
                 destination: None,
                 comments: CommentPane::default(),
+                exit_requested: false,
             },
             Err(error) => Self {
                 bridge: None,
@@ -111,6 +114,7 @@ impl Gui {
                 replacement: String::new(),
                 destination: None,
                 comments: CommentPane::default(),
+                exit_requested: false,
             },
         }
     }
@@ -133,6 +137,18 @@ impl Gui {
         )
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.update_component(message);
+        if self.exit_requested {
+            iced::exit()
+        } else {
+            task
+        }
+    }
+
+    /// Handles one pane message without acquiring authority to terminate the
+    /// embedding application. Hosts observe [`Self::exit_requested`] and
+    /// decide whether to remove the pane or close their own process.
+    pub fn update_component(&mut self, message: Message) -> Task<Message> {
         let mut task = Task::none();
         if !matches!(
             &message,
@@ -350,12 +366,14 @@ impl Gui {
             return Task::none();
         }
         let Some(bridge) = self.bridge.as_mut() else {
-            return iced::exit();
+            self.exit_requested = true;
+            return Task::none();
         };
         match bridge.close(discard) {
             Ok(()) => {
                 self.comments = CommentPane::default();
-                iced::exit()
+                self.exit_requested = true;
+                Task::none()
             }
             Err(BridgeError::Editor(EditorError::Unsaved)) => {
                 self.confirming = true;
@@ -369,12 +387,24 @@ impl Gui {
             }
         }
     }
+
+    /// Lifecycle output only; component mode never terminates the process.
+    pub const fn exit_requested(&self) -> bool {
+        self.exit_requested
+    }
+
     pub fn subscription(&self) -> Subscription<Message> {
         let close = window::close_requests().map(Message::NativeClose);
+        Subscription::batch([close, self.subscription_component()])
+    }
+
+    /// Pane-local subscriptions only. Window-close ownership remains with the
+    /// embedding host.
+    pub fn subscription_component(&self) -> Subscription<Message> {
         let Some(bridge) = &self.bridge else {
-            return close;
+            return Subscription::none();
         };
-        let keys = event::listen_with(|event, status, _| {
+        event::listen_with(|event, status, _| {
             if status != event::Status::Ignored {
                 return None;
             }
@@ -385,8 +415,7 @@ impl Gui {
             shortcut(&key, modifiers)
         })
         .with(bridge.token())
-        .map(|(token, shortcut)| Message::Shortcut(token, shortcut));
-        Subscription::batch([close, keys])
+        .map(|(token, shortcut)| Message::Shortcut(token, shortcut))
     }
     pub fn view(&self) -> Element<'_, Message> {
         let Some(bridge) = &self.bridge else {
@@ -828,6 +857,13 @@ mod tests {
         drop(gui);
         fs::remove_file(path).unwrap();
         fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn component_close_emits_lifecycle_without_owning_process_exit() {
+        let mut gui = Gui::open(&[]);
+        let _ = gui.update_component(Message::Exit);
+        assert!(gui.exit_requested());
     }
 
     #[test]

@@ -65,6 +65,7 @@ pub struct ServiceGui<T> {
     confirming_exit: bool,
     pending: Option<PendingEffect>,
     projectable: bool,
+    exit_requested: bool,
 }
 
 impl<T: ServicePort> ServiceGui<T> {
@@ -77,6 +78,7 @@ impl<T: ServicePort> ServiceGui<T> {
             confirming_exit: false,
             pending: None,
             projectable: false,
+            exit_requested: false,
         }
     }
 
@@ -90,6 +92,7 @@ impl<T: ServicePort> ServiceGui<T> {
             confirming_exit: false,
             pending: None,
             projectable: false,
+            exit_requested: false,
         };
         gui.synchronize_content();
         gui
@@ -133,6 +136,16 @@ impl<T: ServicePort> ServiceGui<T> {
     }
 
     pub fn update(&mut self, message: ServiceMessage) -> Task<ServiceMessage> {
+        let task = self.update_component(message);
+        if self.exit_requested {
+            iced::exit()
+        } else {
+            task
+        }
+    }
+
+    /// Handles one pane message without terminating an embedding application.
+    pub fn update_component(&mut self, message: ServiceMessage) -> Task<ServiceMessage> {
         match message {
             ServiceMessage::Widget(action) => self.edit(action),
             ServiceMessage::PathChanged(path) => {
@@ -161,6 +174,11 @@ impl<T: ServicePort> ServiceGui<T> {
 
     pub fn subscription(&self) -> Subscription<ServiceMessage> {
         let close = window::close_requests().map(ServiceMessage::NativeClose);
+        Subscription::batch([close, self.subscription_component()])
+    }
+
+    /// Service polling and pane-local shortcuts without owning window close.
+    pub fn subscription_component(&self) -> Subscription<ServiceMessage> {
         let keys = event::listen_with(|event, status, _| {
             if status != event::Status::Ignored {
                 return None;
@@ -172,7 +190,7 @@ impl<T: ServicePort> ServiceGui<T> {
             service_shortcut(&key, modifiers)
         });
         let poll = iced::time::every(Duration::from_millis(250)).map(|_| ServiceMessage::Poll);
-        Subscription::batch([close, keys, poll])
+        Subscription::batch([keys, poll])
     }
 
     pub fn view(&self) -> Element<'_, ServiceMessage> {
@@ -407,10 +425,14 @@ impl<T: ServicePort> ServiceGui<T> {
 
     fn disconnect_and_exit(&mut self) -> Task<ServiceMessage> {
         let Some(workspace) = self.workspace.take() else {
-            return iced::exit();
+            self.exit_requested = true;
+            return Task::none();
         };
         match workspace.disconnect() {
-            Ok(_) => iced::exit(),
+            Ok(_) => {
+                self.exit_requested = true;
+                Task::none()
+            }
             Err(failure) => {
                 let (workspace, error) = failure.into_parts();
                 self.workspace = Some(workspace);
@@ -418,6 +440,11 @@ impl<T: ServicePort> ServiceGui<T> {
                 Task::none()
             }
         }
+    }
+
+    /// Lifecycle output only; component mode never terminates the process.
+    pub const fn exit_requested(&self) -> bool {
+        self.exit_requested
     }
 
     fn editable(&self) -> bool {
@@ -718,6 +745,13 @@ mod tests {
             Some((1, 5, String::new()))
         );
         assert_eq!(single_replacement("same", "same"), None);
+    }
+
+    #[test]
+    fn component_disconnect_emits_lifecycle_without_owning_process_exit() {
+        let mut gui = ServiceGui::<ScriptedPort>::failed("unavailable".into());
+        let _ = gui.update_component(ServiceMessage::Exit);
+        assert!(gui.exit_requested());
     }
 
     #[test]

@@ -47,6 +47,11 @@ must not import either standalone binary. This dependency convergence makes
 composition possible but does not itself claim a qualified combined GUI
 executable.
 
+Both embedded and service-backed presentations expose component update,
+subscription, view, and lifecycle output. Component close never calls
+`iced::exit`; only the standalone application wrapper owns process exit and
+native window-close subscription.
+
 ## Qualified dependency patches
 
 The renderer contract relies on reviewed, pinned patches to the accessible
