@@ -5,7 +5,7 @@ use crate::ViewToken;
 use iced::{
     Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
-        Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
+        Layout, Shell, Widget, layout, mouse, overlay, renderer,
         widget::{Operation, Tree, operation::Focusable, tree},
     },
 };
@@ -190,7 +190,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Attached<'_, Message> {
                 return;
             };
             let translation = text_bounds.position() - iced::Point::ORIGIN;
-            let color = theme.extended_palette().primary.strong.color;
+            let color = theme.palette().primary.strong.color;
             for selection in selections {
                 let (regions, color) = match selection {
                     Selection::Caret(point) => (
@@ -247,7 +247,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Attached<'_, Message> {
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -263,7 +262,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Attached<'_, Message> {
                 layout,
                 cursor,
                 renderer,
-                clipboard,
                 shell,
                 viewport,
             );
@@ -304,7 +302,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Attached<'_, Message> {
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );

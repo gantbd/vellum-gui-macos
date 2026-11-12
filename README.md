@@ -38,19 +38,25 @@ rendered-selection geometry, and attachment identities. It owns no process
 lifecycle, filesystem policy, document source, or history. The binary selects
 the macOS adapters and window lifecycle.
 
-A future workbench can import this library beside Agora or another engine's
-Iced library under one application. That composition root must route effects
-to each engine's own authority and must not import this standalone binary.
+Vellum and Chronos now use the same exact accessible `plushie-iced` 0.8.4
+lineage. A workbench can import both presentation libraries under one Iced
+runtime. Because Cargo applies `[patch]` only at the workspace root, that
+workbench must select Vellum's qualified vendored Plushie packages itself. The
+composition root must also route effects to each engine's own authority and
+must not import either standalone binary. This dependency convergence makes
+composition possible but does not itself claim a qualified combined GUI
+executable.
 
 ## Qualified dependency patches
 
-The renderer contract relies on reviewed, pinned patches to Iced 0.14 and
-`objc2-app-kit` retained under `vendor/`. They add a read-only, bounded
-selection-geometry query and the generated private-pasteboard release binding.
-Their upstream revisions, archive hashes, licenses, exact changes, and
-nonclaims are recorded in [vendor/README.md](vendor/README.md). Stock Iced does
-not provide the geometry query; removing these patches would discard qualified
-multi-selection rendering behavior.
+The renderer contract relies on reviewed, pinned patches to the accessible
+`plushie-iced` 0.8.4 lineage and `objc2-app-kit` retained under `vendor/`. They
+add a read-only, bounded selection-geometry query and the generated
+private-pasteboard release binding. Their upstream revisions, archive hashes,
+licenses, exact changes, and nonclaims are recorded in
+[vendor/README.md](vendor/README.md). Upstream Plushie Iced does not provide the
+geometry query; removing these patches would discard qualified multi-selection
+rendering behavior.
 
 ## Current source checkout
 

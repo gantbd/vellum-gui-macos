@@ -2,16 +2,20 @@
 resolver = "3"
 exclude = [
     "vendor/objc2-app-kit",
-    "vendor/iced_core",
-    "vendor/iced_graphics",
-    "vendor/iced_widget",
+    "vendor/plushie-iced-core",
+    "vendor/plushie-iced-graphics",
+    "vendor/plushie-iced-widget",
+    "vendor/plushie-iced-futures",
+    "vendor/plushie-iced-winit",
 ]
 
 [patch.crates-io]
 objc2-app-kit = { path = "vendor/objc2-app-kit" }
-iced_core = { path = "vendor/iced_core" }
-iced_graphics = { path = "vendor/iced_graphics" }
-iced_widget = { path = "vendor/iced_widget" }
+plushie-iced-core = { path = "vendor/plushie-iced-core" }
+plushie-iced-graphics = { path = "vendor/plushie-iced-graphics" }
+plushie-iced-widget = { path = "vendor/plushie-iced-widget" }
+plushie-iced-futures = { path = "vendor/plushie-iced-futures" }
+plushie-iced-winit = { path = "vendor/plushie-iced-winit" }
 
 [workspace.package]
 version = "0.1.0"
@@ -62,7 +66,7 @@ vellum-session = { version = "=0.1.0", path = "../vellum/host/vellum-session" }
 vellum-sdk-client = { version = "=0.1.0", path = "../vellum/sdk/client" }
 vellum-adapter-local-authentication = { version = "=0.1.0", path = "../vellum/adapters/local-authentication" }
 unicode-segmentation = "=1.13.3"
-iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "basic-shaping", "thread-pool", "tokio", "advanced"] }
+iced = { package = "plushie-iced", version = "=0.8.4", default-features = false, features = ["a11y", "tiny-skia", "basic-shaping", "thread-pool", "tokio", "advanced"] }
 
 [dev-dependencies]
 serde_json = "=1.0.151"

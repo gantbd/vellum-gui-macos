@@ -36,26 +36,50 @@ fn unpublished_gui_is_bound_to_its_engine_and_recovery_sources() {
             "GUI peer bypasses the SDK through {forbidden}"
         );
     }
-    for patch in ["iced_core", "iced_graphics", "iced_widget", "objc2-app-kit"] {
+    assert!(manifest.contains("package = \"plushie-iced\""));
+    assert!(manifest.contains("version = \"=0.8.4\""));
+    assert!(manifest.contains("\"a11y\""));
+    for patch in [
+        "plushie-iced-core",
+        "plushie-iced-graphics",
+        "plushie-iced-widget",
+        "plushie-iced-futures",
+        "plushie-iced-winit",
+        "objc2-app-kit",
+    ] {
         assert!(manifest.contains(&format!("{patch} = {{ path = \"vendor/")));
+    }
+    for retired in ["iced_core", "iced_graphics", "iced_widget"] {
+        assert!(
+            !manifest.contains(&format!("{retired} = {{ path = \"vendor/")),
+            "retired stock-Iced patch remains active: {retired}"
+        );
     }
     assert!(!manifest.contains("vellum-tui"));
     assert!(!manifest.contains("vellum-mcp"));
+
+    let readme = fs::read_to_string(root.join("README.md")).expect("README");
+    assert!(readme.contains("Cargo applies `[patch]` only at the workspace root"));
+    assert!(readme.contains("must select Vellum's qualified vendored Plushie packages"));
 }
 
 #[test]
 fn vendored_geometry_and_pasteboard_contracts_are_present() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let widget = fs::read_to_string(root.join("vendor/iced_widget/src/text_editor.rs"))
+    let widget = fs::read_to_string(root.join("vendor/plushie-iced-widget/src/text_editor.rs"))
         .expect("vendored widget");
     assert!(widget.contains("selection_geometry"));
-    let core = fs::read_to_string(root.join("vendor/iced_core/src/text/editor.rs"))
+    let core = fs::read_to_string(root.join("vendor/plushie-iced-core/src/text/editor.rs"))
         .expect("vendored core");
-    assert!(core.contains("Read-only geometry using cached layout"));
     assert!(core.contains("fn selection_for("));
-    let graphics = fs::read_to_string(root.join("vendor/iced_graphics/src/text/editor.rs"))
+    let graphics = fs::read_to_string(root.join("vendor/plushie-iced-graphics/src/text/editor.rs"))
         .expect("vendored graphics");
-    assert!(graphics.contains("fn geometry"));
+    assert!(graphics.contains("fn selection_for("));
+    let winit = fs::read_to_string(root.join("vendor/plushie-iced-winit/Cargo.toml"))
+        .expect("vendored window runtime");
+    assert!(winit.contains("[target.'cfg(target_arch = \"wasm32\")'.dependencies.web-sys]"));
+    assert!(winit.contains("version = \"=0.3.107\""));
+    assert!(root.join("vendor/plushie-iced-futures").is_dir());
     let appkit =
         fs::read_to_string(root.join("vendor/objc2-app-kit/src/generated/NSPasteboard.rs"))
             .expect("vendored AppKit binding");

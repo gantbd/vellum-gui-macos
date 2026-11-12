@@ -3,7 +3,7 @@
 use super::*;
 use iced::{
     Event, Point, Rectangle, Renderer, Size,
-    advanced::{InputMethod, Layout, Shell, clipboard, input_method, layout, mouse, widget::Tree},
+    advanced::{InputMethod, Layout, Shell, input_method, layout, mouse, widget::Tree},
 };
 use std::{
     fs,
@@ -91,7 +91,10 @@ fn actual_source_draw_uses_secondary_renderer_geometry_without_editing() {
     assert!(gui.notice.is_empty(), "{}", gui.notice);
     let bridge = gui.bridge.as_ref().unwrap();
     let primary = bridge.content().cursor();
-    let mut renderer = Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0));
+    let mut renderer = Renderer::new(iced::advanced::renderer::Settings {
+        default_font: iced::Font::MONOSPACE,
+        default_text_size: iced::Pixels(16.0),
+    });
     {
         let mut view = document_editor(bridge);
         let mut tree = Tree::new(view.as_widget());
@@ -166,7 +169,10 @@ fn full_window_layout_keeps_source_and_comment_draft_in_separate_usable_viewport
         vellum_model::CommentPointProfile::Content,
     )));
     assert!(gui.notice.is_empty(), "{}", gui.notice);
-    let renderer = Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0));
+    let renderer = Renderer::new(iced::advanced::renderer::Settings {
+        default_font: iced::Font::MONOSPACE,
+        default_text_size: iced::Pixels(16.0),
+    });
     {
         let mut view = gui.view();
         let mut tree = Tree::new(view.as_widget());
@@ -259,7 +265,10 @@ impl Framework {
     }
     fn new() -> Self {
         Self {
-            renderer: Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0)),
+            renderer: Renderer::new(iced::advanced::renderer::Settings {
+                default_font: iced::Font::MONOSPACE,
+                default_text_size: iced::Pixels(16.0),
+            }),
             tree: None,
             cursor: mouse::Cursor::Available(Point::new(13.0, 13.0)),
             comment: false,
@@ -291,7 +300,6 @@ impl Framework {
                 Layout::new(&node),
                 self.cursor,
                 &self.renderer,
-                &mut clipboard::Null,
                 &mut shell,
                 &bounds,
             );

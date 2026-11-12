@@ -9,7 +9,10 @@ use iced::{
 };
 
 fn layout_content(content: &Content, size: Size) {
-    let renderer = Renderer::new(iced::Font::MONOSPACE, iced::Pixels(16.0));
+    let renderer = Renderer::new(iced::advanced::renderer::Settings {
+        default_font: iced::Font::MONOSPACE,
+        default_text_size: iced::Pixels(16.0),
+    });
     let mut widget: Element<'_, ()> = text_editor(content)
         .font(iced::Font::MONOSPACE)
         .width(size.width)
@@ -171,6 +174,7 @@ fn renderer_query_matches_its_primary_paint_geometry_without_mutating_cursor() {
         iced::Pixels(16.0),
         text::LineHeight::default(),
         text::Wrapping::default(),
+        Some(1.0),
         &mut highlighter,
     );
     let initial = renderer.cursor();
