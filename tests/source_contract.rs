@@ -62,6 +62,9 @@ fn unpublished_gui_is_bound_to_its_engine_and_recovery_sources() {
     assert!(readme.contains("Cargo applies `[patch]` only at the workspace root"));
     assert!(readme.contains("must select Vellum's qualified vendored Plushie packages"));
     assert!(readme.contains("Component close never calls"));
+
+    let facade = fs::read_to_string(root.join("src/lib.rs")).expect("library facade");
+    assert!(facade.contains("pub use gui::{Gui, Message as GuiMessage}"));
 }
 
 #[test]

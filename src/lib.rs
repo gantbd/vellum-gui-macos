@@ -11,7 +11,7 @@ mod comment_draft;
 #[cfg(target_os = "macos")]
 mod gui;
 #[cfg(target_os = "macos")]
-pub use gui::Gui;
+pub use gui::{Gui, Message as GuiMessage};
 #[cfg(target_os = "macos")]
 mod service;
 #[cfg(target_os = "macos")]
