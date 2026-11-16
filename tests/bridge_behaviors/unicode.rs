@@ -1,6 +1,6 @@
 use super::*;
+use vellum_editor::NativeUnicodeProfile;
 use vellum_gui_macos::BridgeError;
-use vellum_model::NativeUnicodeProfile;
 
 fn native(f: &Fixture, capacity: usize) -> Bridge {
     let mut config = reference_profile();

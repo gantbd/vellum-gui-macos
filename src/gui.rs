@@ -1,13 +1,12 @@
-use crate::{Bridge, BridgeError, Command, ViewToken, plan_workspace_roots};
+use crate::{Bridge, BridgeError, Command, ViewToken};
 use iced::{
     Element, Subscription, Task, event,
     keyboard::{self, Key, Modifiers},
     widget::{button, column, container, row, scrollable, text, text_editor, text_input},
     window,
 };
-use std::path::PathBuf;
-use vellum_adapter_clipboard_macos::Operation;
-use vellum_model::{DestinationPlan, EditorError};
+use std::{path::PathBuf, sync::Arc};
+use vellum_editor::{DestinationPlan, EditorError};
 #[path = "comments_ui.rs"]
 mod comments_ui;
 use comments_ui::{CommentMessage, CommentPane};
@@ -16,6 +15,7 @@ use comments_ui::{CommentMessage, CommentPane};
 pub(crate) mod qualification;
 
 pub struct Gui {
+    host: SharedWorkspaceHost,
     bridge: Option<Bridge>,
     notice: String,
     confirming: bool,
@@ -26,6 +26,39 @@ pub struct Gui {
     comments: CommentPane,
     exit_requested: bool,
 }
+
+/// Presentation intent only. The selected host decides whether and how to
+/// interpret it through a concrete clipboard adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClipboardAction {
+    Copy,
+    Cut,
+    Paste,
+}
+
+/// Closed, content-safe admission failures exposed to the presentation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspaceAdmissionError {
+    Empty,
+    Refused,
+}
+
+impl std::fmt::Display for WorkspaceAdmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "workspace admission refused: {self:?}")
+    }
+}
+
+impl std::error::Error for WorkspaceAdmissionError {}
+
+/// Effect port supplied by a standalone binary or composite host. The
+/// presentation owns neither filesystem discovery nor editor construction.
+pub trait WorkspaceHost {
+    fn plan_roots(&self, roots: &[PathBuf]) -> Result<Vec<PathBuf>, WorkspaceAdmissionError>;
+    fn open(&self, paths: &[PathBuf]) -> Result<Bridge, BridgeError>;
+}
+
+pub type SharedWorkspaceHost = Arc<dyn WorkspaceHost>;
 #[derive(Clone, Copy, Debug)]
 pub enum Shortcut {
     Command(Command),
@@ -33,7 +66,7 @@ pub enum Shortcut {
 }
 #[derive(Clone)]
 pub enum Message {
-    Clipboard(ViewToken, Option<Operation>),
+    Clipboard(ViewToken, Option<ClipboardAction>),
     Widget(ViewToken, text_editor::Action),
     Shortcut(ViewToken, Shortcut),
     NativeClose(window::Id),
@@ -79,9 +112,10 @@ impl std::fmt::Debug for Message {
     }
 }
 impl Gui {
-    pub fn open(paths: &[PathBuf]) -> Self {
+    pub fn open(host: SharedWorkspaceHost, paths: &[PathBuf]) -> Self {
         if paths.is_empty() {
             return Self {
+                host,
                 bridge: None,
                 notice: "Open an existing local file (64 KiB reference profile)".into(),
                 confirming: false,
@@ -93,8 +127,9 @@ impl Gui {
                 exit_requested: false,
             };
         }
-        match Bridge::open_reference(paths) {
+        match host.open(paths) {
             Ok(bridge) => Self {
+                host,
                 bridge: Some(bridge),
                 notice: String::new(),
                 confirming: false,
@@ -106,6 +141,7 @@ impl Gui {
                 exit_requested: false,
             },
             Err(error) => Self {
+                host,
                 bridge: None,
                 notice: error.to_string(),
                 confirming: false,
@@ -310,7 +346,7 @@ impl Gui {
                 if !self.path.is_empty() {
                     self.confirming = false;
                     let root = PathBuf::from(&self.path);
-                    let paths = match plan_workspace_roots([root]) {
+                    let paths = match self.host.plan_roots(&[root]) {
                         Ok(paths) => paths,
                         Err(error) => {
                             self.notice = error.to_string();
@@ -341,7 +377,7 @@ impl Gui {
                             },
                         );
                     } else {
-                        match Bridge::open_reference(&paths) {
+                        match self.host.open(&paths) {
                             Ok(bridge) => {
                                 self.bridge = Some(bridge);
                                 self.notice.clear();
@@ -463,15 +499,22 @@ impl Gui {
                 Shortcut::Command(Command::NextDocument)
             )),
             button("Comments").on_press(Message::Comment(CommentMessage::Toggle(token.clone()))),
-            button("Copy source")
-                .on_press(Message::Clipboard(token.clone(), Some(Operation::Copy))),
-            button("Cut source").on_press(Message::Clipboard(token.clone(), Some(Operation::Cut))),
-            button("Paste source")
-                .on_press(Message::Clipboard(token.clone(), Some(Operation::Paste))),
+            button("Copy source").on_press(Message::Clipboard(
+                token.clone(),
+                Some(ClipboardAction::Copy)
+            )),
+            button("Cut source").on_press(Message::Clipboard(
+                token.clone(),
+                Some(ClipboardAction::Cut)
+            )),
+            button("Paste source").on_press(Message::Clipboard(
+                token.clone(),
+                Some(ClipboardAction::Paste)
+            )),
             button("Retry delivery").on_press_maybe(
                 bridge
                     .native_clipboard_stage()
-                    .filter(|s| *s != vellum_adapter_clipboard_macos::ClipboardStage::Idle)
+                    .filter(|s| *s != vellum_clipboard_macos::ClipboardStage::Idle)
                     .map(|_| Message::Clipboard(token.clone(), None))
             ),
             button("Quit").on_press(Message::Shortcut(token.clone(), Shortcut::Quit)),
@@ -664,9 +707,9 @@ fn key_binding(
         && matches!(press.status, text_editor::Status::Focused { .. })
     {
         let operation = match press.key.as_ref() {
-            Key::Character("c" | "C") => Some(Operation::Copy),
-            Key::Character("x" | "X") => Some(Operation::Cut),
-            Key::Character("v" | "V") => Some(Operation::Paste),
+            Key::Character("c" | "C") => Some(ClipboardAction::Copy),
+            Key::Character("x" | "X") => Some(ClipboardAction::Cut),
+            Key::Character("v" | "V") => Some(ClipboardAction::Paste),
             _ => None,
         };
         if let Some(operation) = operation {
@@ -718,7 +761,7 @@ mod tests {
         fs::write(&first, "first").unwrap();
         fs::write(&second, "second").unwrap();
 
-        let mut gui = Gui::open(&[]);
+        let mut gui = Gui::open(crate::reference_workspace_host(), &[]);
         assert!(gui.bridge.is_none());
         assert_eq!(gui.title(), "Vellum — open file");
         let _ = gui.update(Message::PathChanged(
@@ -777,9 +820,9 @@ mod tests {
             }
         }
         for (key, expected) in [
-            ("c", Operation::Copy),
-            ("x", Operation::Cut),
-            ("v", Operation::Paste),
+            ("c", ClipboardAction::Copy),
+            ("x", ClipboardAction::Cut),
+            ("v", ClipboardAction::Paste),
         ] {
             assert!(matches!(key_binding(ViewToken::test_token(), press(key)),
                 Some(text_editor::Binding::Custom(Message::Clipboard(_, Some(operation)))) if operation == expected));
@@ -831,7 +874,10 @@ mod tests {
         };
         let path = directory.join("source");
         fs::write(&path, b"A").unwrap();
-        let mut gui = Gui::open(std::slice::from_ref(&path));
+        let mut gui = Gui::open(
+            crate::reference_workspace_host(),
+            std::slice::from_ref(&path),
+        );
         let token = gui.bridge.as_ref().unwrap().token();
         let _ = gui.update(Message::Widget(
             token.clone(),
@@ -861,7 +907,7 @@ mod tests {
 
     #[test]
     fn component_close_emits_lifecycle_without_owning_process_exit() {
-        let mut gui = Gui::open(&[]);
+        let mut gui = Gui::open(crate::reference_workspace_host(), &[]);
         let _ = gui.update_component(Message::Exit);
         assert!(gui.exit_requested());
     }
@@ -889,7 +935,10 @@ mod tests {
         let target = directory.join("target");
         fs::write(&source, b"A").unwrap();
         fs::write(&target, b"OLD").unwrap();
-        let mut gui = Gui::open(std::slice::from_ref(&source));
+        let mut gui = Gui::open(
+            crate::reference_workspace_host(),
+            std::slice::from_ref(&source),
+        );
         let token = gui.bridge.as_ref().unwrap().token();
         let _ = gui.update(Message::PathChanged(target.to_str().unwrap().into()));
         let _ = gui.update(Message::RequestDestination(token.clone(), true));

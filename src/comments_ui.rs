@@ -2,7 +2,7 @@
 use super::*;
 use crate::comment_draft::Draft;
 use iced::widget::{column, scrollable};
-use vellum_model::{
+use vellum_editor::{
     CommentDraft, CommentHandle, CommentHistoryDirection, CommentLocationEvidence,
     CommentPlacement, CommentPointProfile, CommentTarget,
 };
@@ -13,7 +13,7 @@ pub(super) struct CommentPane {
     error: Option<String>,
     form: Option<Form>,
     path: String,
-    pending: Option<(ViewToken, vellum_model::CommentFilePlan)>,
+    pending: Option<(ViewToken, vellum_editor::CommentFilePlan)>,
     dirty: bool,
 }
 struct Form {
@@ -30,7 +30,7 @@ enum Target {
 pub enum CommentMessage {
     FilePath(ViewToken, String),
     FileRequest(ViewToken, bool),
-    FileConfirm(ViewToken, vellum_model::CommentFilePlan),
+    FileConfirm(ViewToken, vellum_editor::CommentFilePlan),
     FileCancel,
     FileReleaseFailed(ViewToken),
     Toggle(ViewToken),
@@ -460,7 +460,10 @@ mod tests {
             }
         }
         fn gui(&self) -> Gui {
-            Gui::open(&[self.0.join("a"), self.0.join("b")])
+            Gui::open(
+                crate::reference_workspace_host(),
+                &[self.0.join("a"), self.0.join("b")],
+            )
         }
     }
     impl Drop for Fixture {
@@ -742,21 +745,24 @@ mod tests {
             original.clone(),
             Shortcut::Command(Command::NextDocument),
         ));
-        let _ = gui.update(Message::Clipboard(original.clone(), Some(Operation::Copy)));
+        let _ = gui.update(Message::Clipboard(
+            original.clone(),
+            Some(ClipboardAction::Copy),
+        ));
         assert!(gui.notice.contains("Stale"), "{}", gui.notice);
         let _ = gui.update(Message::Shortcut(
             source(&gui),
             Shortcut::Command(Command::NextDocument),
         ));
-        let _ = gui.update(Message::Clipboard(original, Some(Operation::Paste)));
+        let _ = gui.update(Message::Clipboard(original, Some(ClipboardAction::Paste)));
         assert!(gui.notice.contains("Stale"), "{}", gui.notice);
         let form = begin(&mut gui, CommentPointProfile::Content, "unapplied");
-        let _ = gui.update(Message::Clipboard(source(&gui), Some(Operation::Cut)));
+        let _ = gui.update(Message::Clipboard(source(&gui), Some(ClipboardAction::Cut)));
         assert!(gui.notice.contains("Unapplied"));
         assert_eq!(gui.comments.form.as_ref().unwrap().body.raw(), "unapplied");
         assert_eq!(
             gui.bridge.as_ref().unwrap().native_clipboard_stage(),
-            Some(vellum_adapter_clipboard_macos::ClipboardStage::Idle)
+            Some(vellum_clipboard_macos::ClipboardStage::Idle)
         );
         send(&mut gui, CommentMessage::Cancel(form));
         gui.bridge.as_mut().unwrap().close(false).unwrap();

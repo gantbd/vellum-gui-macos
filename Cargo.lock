@@ -2819,9 +2819,6 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
- "vellum-editor",
- "vellum-engine",
- "vellum-session",
 ]
 
 [[package]]
@@ -2864,6 +2861,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vellum-clipboard-macos"
+version = "0.1.0"
+dependencies = [
+ "objc2 0.6.5",
+ "vellum-adapter-clipboard-macos",
+ "vellum-editor",
+ "vellum-session",
+]
+
+[[package]]
 name = "vellum-editor"
 version = "0.1.0"
 dependencies = [
@@ -2874,6 +2881,7 @@ dependencies = [
  "vellum-engine",
  "vellum-host",
  "vellum-session",
+ "vellum-workspace",
 ]
 
 [[package]]
@@ -2892,10 +2900,10 @@ dependencies = [
  "serde_json",
  "unicode-segmentation",
  "vellum-adapter-annotation-json",
- "vellum-adapter-clipboard-macos",
  "vellum-adapter-local-authentication",
  "vellum-adapter-local-fs",
  "vellum-adapter-unicode-icu",
+ "vellum-clipboard-macos",
  "vellum-editor",
  "vellum-engine",
  "vellum-sdk-client",
@@ -2948,6 +2956,15 @@ version = "0.1.0"
 dependencies = [
  "keystone-codec",
  "vellum-protocol",
+]
+
+[[package]]
+name = "vellum-workspace"
+version = "0.1.0"
+dependencies = [
+ "vellum-engine",
+ "vellum-host",
+ "vellum-session",
 ]
 
 [[package]]
@@ -3782,15 +3799,3 @@ dependencies = [
  "syn 3.0.10",
  "winnow",
 ]
-
-[[patch.unused]]
-name = "iced_core"
-version = "0.14.0"
-
-[[patch.unused]]
-name = "iced_graphics"
-version = "0.14.0"
-
-[[patch.unused]]
-name = "iced_widget"
-version = "0.14.2"

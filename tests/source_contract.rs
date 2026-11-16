@@ -64,7 +64,17 @@ fn unpublished_gui_is_bound_to_its_engine_and_recovery_sources() {
     assert!(readme.contains("Component close never calls"));
 
     let facade = fs::read_to_string(root.join("src/lib.rs")).expect("library facade");
-    assert!(facade.contains("pub use gui::{Gui, Message as GuiMessage}"));
+    for port in [
+        "SharedWorkspaceHost",
+        "WorkspaceAdmissionError",
+        "WorkspaceHost",
+    ] {
+        assert!(facade.contains(port), "library facade omits {port}");
+    }
+    let presentation = fs::read_to_string(root.join("src/gui.rs")).expect("GUI presentation");
+    assert!(presentation.contains("pub fn open(host: SharedWorkspaceHost"));
+    assert!(!presentation.contains("Bridge::open_reference"));
+    assert!(!presentation.contains("vellum_adapter_local_fs"));
 }
 
 #[test]

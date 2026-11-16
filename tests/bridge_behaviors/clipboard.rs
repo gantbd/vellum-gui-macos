@@ -1,6 +1,6 @@
 use super::*;
+use vellum_editor::ReferenceSessionConfig;
 use vellum_engine::coordinator::InvocationLimits;
-use vellum_model::ReferenceSessionConfig;
 use vellum_session::host::{TextTransferCaptureLimitsV1, copy_transfer::*};
 fn config() -> ReferenceSessionConfig {
     let mut c = reference_profile();

@@ -1,6 +1,6 @@
 //! Annotation UI routing over the original editor/native owners.
 use super::*;
-use vellum_model::{
+use vellum_editor::{
     CommentDraft, CommentHandle, CommentHistoryDirection, CommentPointProfile, CommentRow,
 };
 impl Bridge {
@@ -18,7 +18,7 @@ impl Bridge {
         token: &ViewToken,
         path: PathBuf,
         load: bool,
-    ) -> Result<vellum_model::CommentFilePlan, BridgeError> {
+    ) -> Result<vellum_editor::CommentFilePlan, BridgeError> {
         self.check(token)?;
         Ok(self.editor.plan_comment_file(path, load)?)
     }
@@ -28,7 +28,7 @@ impl Bridge {
     pub fn confirm_comment_file(
         &mut self,
         token: &ViewToken,
-        plan: &vellum_model::CommentFilePlan,
+        plan: &vellum_editor::CommentFilePlan,
     ) -> Result<(), BridgeError> {
         self.check(token)?;
         let result = self.editor.confirm_comment_file(plan);

@@ -11,7 +11,10 @@ mod comment_draft;
 #[cfg(target_os = "macos")]
 mod gui;
 #[cfg(target_os = "macos")]
-pub use gui::{Gui, Message as GuiMessage};
+pub use gui::{
+    ClipboardAction, Gui, Message as GuiMessage, SharedWorkspaceHost, WorkspaceAdmissionError,
+    WorkspaceHost,
+};
 #[cfg(target_os = "macos")]
 mod service;
 #[cfg(target_os = "macos")]
@@ -68,7 +71,7 @@ pub fn plan_workspace_roots(
 }
 
 #[cfg(target_os = "macos")]
-pub fn reference_session_config() -> vellum_model::ReferenceSessionConfig {
+pub fn reference_session_config() -> vellum_editor::ReferenceSessionConfig {
     reference_session_config_with_filesystem_limits(vellum_adapter_local_fs::FilesystemLimits {
         max_resources: 16,
         max_bytes: 65536,
@@ -80,9 +83,9 @@ pub fn reference_session_config() -> vellum_model::ReferenceSessionConfig {
 #[cfg(target_os = "macos")]
 pub fn reference_session_config_with_filesystem_limits(
     limits: vellum_adapter_local_fs::FilesystemLimits,
-) -> vellum_model::ReferenceSessionConfig {
+) -> vellum_editor::ReferenceSessionConfig {
     use vellum_adapter_local_fs::LocalFilesystemFactory;
-    let mut config = vellum_model::reference_profile(
+    let mut config = vellum_editor::reference_profile(
         LocalFilesystemFactory::new(limits).erase(),
         Box::new(vellum_adapter_annotation_json::JsonAnnotationCodec),
     );
@@ -92,6 +95,27 @@ pub fn reference_session_config_with_filesystem_limits(
         max_intent_bytes: 262144,
     });
     config
+}
+
+/// Current macOS reference interpretation of the presentation's workspace
+/// host port. Selecting it is an explicit composition-root decision.
+pub struct ReferenceWorkspaceHost;
+
+impl WorkspaceHost for ReferenceWorkspaceHost {
+    fn plan_roots(&self, roots: &[PathBuf]) -> Result<Vec<PathBuf>, WorkspaceAdmissionError> {
+        plan_workspace_roots(roots).map_err(|error| match error {
+            RootAdmissionError::Empty => WorkspaceAdmissionError::Empty,
+            RootAdmissionError::Plan(_) => WorkspaceAdmissionError::Refused,
+        })
+    }
+
+    fn open(&self, paths: &[PathBuf]) -> Result<Bridge, BridgeError> {
+        Bridge::open_reference(paths)
+    }
+}
+
+pub fn reference_workspace_host() -> SharedWorkspaceHost {
+    std::sync::Arc::new(ReferenceWorkspaceHost)
 }
 #[cfg(all(target_os = "macos", feature = "desktop-qualification"))]
 pub use gui::qualification::run as qualify_desktop;
@@ -122,12 +146,16 @@ pub fn run(args: Vec<std::ffi::OsString>) -> Result<(), Box<dyn std::error::Erro
     } else {
         plan_workspace_roots(&roots)?
     };
-    iced::application(move || Gui::open(&paths), Gui::update, Gui::view)
-        .title(Gui::title)
-        .subscription(Gui::subscription)
-        .exit_on_close_request(false)
-        .window_size((960.0, 720.0))
-        .run()?;
+    iced::application(
+        move || Gui::open(reference_workspace_host(), &paths),
+        Gui::update,
+        Gui::view,
+    )
+    .title(Gui::title)
+    .subscription(Gui::subscription)
+    .exit_on_close_request(false)
+    .window_size((960.0, 720.0))
+    .run()?;
     Ok(())
 }
 

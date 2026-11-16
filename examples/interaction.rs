@@ -210,7 +210,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let attaching = Instant::now();
             let mut bridge = Bridge::open(std::slice::from_ref(&path), config)?;
             if options.native_unicode {
-                let mut profile = vellum_model::NativeUnicodeProfile::reference();
+                let mut profile = vellum_editor::NativeUnicodeProfile::reference();
                 profile.capture_capacity = capacity;
                 let mut factory = vellum_adapter_unicode_icu::IcuFactory::reference();
                 factory.timing = if capacity == 0 {

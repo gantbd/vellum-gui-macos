@@ -56,11 +56,11 @@ name = "iced-interaction"
 path = "examples/interaction.rs"
 
 [dependencies]
-vellum-adapter-clipboard-macos = { version = "=0.1.0", path = "../vellum/adapters/clipboard-macos" }
+vellum-clipboard-macos = { version = "=0.1.0", path = "../vellum/applications/vellum-clipboard-macos" }
 vellum-adapter-local-fs = { version = "=0.1.0", path = "../vellum/adapters/local-fs" }
 vellum-adapter-annotation-json = { version = "=0.1.0", path = "../vellum/adapters/annotation-json" }
 vellum-adapter-unicode-icu = { version = "=0.1.0", path = "../vellum/adapters/unicode-icu" }
-vellum-model = { package = "vellum-editor", version = "=0.1.0", path = "../vellum/host/vellum-editor", features = ["native-unicode"] }
+vellum-editor = { version = "=0.1.0", path = "../vellum/host/vellum-editor", features = ["native-unicode"] }
 vellum-engine = { version = "=0.1.0", path = "../vellum/engine/vellum-engine" }
 vellum-session = { version = "=0.1.0", path = "../vellum/host/vellum-session" }
 vellum-sdk-client = { version = "=0.1.0", path = "../vellum/sdk/client" }

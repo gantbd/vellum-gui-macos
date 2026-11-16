@@ -128,7 +128,10 @@ struct Probe {
 impl Probe {
     fn new(fixture: Fixture, outcome: Outcome) -> (Self, Task<Message>) {
         let started = Instant::now();
-        let gui = Gui::open(std::slice::from_ref(&fixture.source));
+        let gui = Gui::open(
+            crate::reference_workspace_host(),
+            std::slice::from_ref(&fixture.source),
+        );
         // A separate timer thread does not block Iced's executor or the UI.
         // This diagnostic deadline is not a product responsiveness budget.
         let (send, receive) = iced::futures::channel::oneshot::channel();
