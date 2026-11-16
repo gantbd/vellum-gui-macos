@@ -16,12 +16,8 @@ fn unpublished_gui_is_bound_to_its_engine_and_recovery_sources() {
     assert_eq!(source["vellumRevision"], VELLUM_REVISION);
     assert_eq!(source["recoveredFromVellumRevision"], RECOVERY_REVISION);
     assert_eq!(source["keystoneRevision"], KEYSTONE_REVISION);
-    for field in [
-        "remoteReachabilityQualified",
-        "cratesIoPublished",
-        "signed",
-        "notarized",
-    ] {
+    assert_eq!(source["remoteReachabilityQualified"], true);
+    for field in ["cratesIoPublished", "signed", "notarized"] {
         assert_eq!(source[field], false);
     }
 

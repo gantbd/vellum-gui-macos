@@ -65,15 +65,15 @@ rendering behavior.
 
 ## Current source checkout
 
-Until the pinned Vellum commit is reachable from its declared GitHub remote,
-this unreleased peer uses a sibling `../vellum` checkout. Run:
+The pinned Vellum and Keystone commits are reachable from their declared GitHub
+remotes. This unreleased peer deliberately keeps a sibling `../vellum` checkout
+for coordinated source qualification. Run:
 
 ```sh
 cargo test --all-targets --locked --offline
 ```
 
-GitHub source installation will replace the Vellum paths with exact Git
-revisions after remote reachability is established. Nothing is published to
+Standalone Git source installation is not claimed. Nothing is published to
 crates.io, signed, notarized, or released.
 
 The optional `desktop-qualification` feature opens a real window and must be
