@@ -48,4 +48,5 @@ jobs:
           cargo test --all-targets --locked
           cargo clippy --all-targets --locked -- -D warnings
           RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --locked
+          cargo fetch --locked --manifest-path ../vellum/Cargo.toml
           ./tests/live/service_journey.sh
